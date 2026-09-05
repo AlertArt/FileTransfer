@@ -56,17 +56,10 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     public async Task<TransferTaskInfo> CreateSendTaskAsync(string filePath, DeviceNode peer, CancellationToken ct = default)
     {
-        // 关键：所有耗时 IO/CPU 操作（文件大小、SHA-256 全文件哈希、图片解码缩放）
-        // 必须放到线程池执行。否则从 UI 线程调用时（SendFilesAsync → CreateSendTaskAsync），
-        // GenerateThumbnailAsync 内部的 new Bitmap(filePath) 与 SHA256 计算会同步阻塞 UI 线程，
-        // 表现为"选完文件后界面卡死很久"。
-        var (size, sha, thumb) = await Task.Run(async () =>
-        {
-            var s = _storage.GetFileSize(filePath);
-            var hash = await _storage.ComputeSha256Async(filePath).ConfigureAwait(false);
-            var thumbnail = await _thumbnail.GenerateThumbnailAsync(filePath).ConfigureAwait(false);
-            return (s, hash, thumbnail);
-        }, ct).ConfigureAwait(false);
+        // 快速路径：只获取文件名 + 大小，立即返回任务对象，让 UI 第一时间展示任务卡片。
+        // 大文件的 SHA-256 全文件哈希与缩略图生成移到 StartSendAsync 的 Preparing 阶段后台计算，
+        // 避免用户选完大文件后"界面无反应很久"。
+        var size = await Task.Run(() => _storage.GetFileSize(filePath), ct).ConfigureAwait(false);
 
         var task = new TransferTaskInfo
         {
@@ -74,9 +67,9 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             FileName = Path.GetFileName(filePath),
             TotalBytes = size,
             ChunkSize = ProtocolConstants.ChunkSize,
-            Sha256 = sha,
-            ThumbnailBase64 = thumb is null ? null : Convert.ToBase64String(thumb),
-            ThumbnailMimeType = thumb is null ? null : "image/jpeg",
+            Sha256 = string.Empty, // 延迟到 StartSendAsync 中计算
+            ThumbnailBase64 = null,
+            ThumbnailMimeType = null,
             Direction = TransferDirection.Send,
             Peer = peer,
             LocalPath = filePath,
@@ -93,6 +86,34 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         if (_tasks.TryGetValue(fileId, out var task) is false) return;
 
         SetState(task, TransferState.Created, TransferState.Preparing);
+
+        // Preparing 阶段：在后台线程计算 SHA-256 全文件哈希 + 生成缩略图。
+        // 大文件（数百 MB ~ GB）此步骤耗时较长，放在这里而不是 CreateSendTaskAsync，
+        // 让任务卡片能立即出现在 UI 上（状态显示"握手中"），用户不再"选完文件傻等"。
+        try
+        {
+            var (sha, thumb) = await Task.Run(async () =>
+            {
+                var hash = await _storage.ComputeSha256Async(task.LocalPath!).ConfigureAwait(false);
+                var thumbnail = await _thumbnail.GenerateThumbnailAsync(task.LocalPath!).ConfigureAwait(false);
+                return (hash, thumbnail);
+            }, ct).ConfigureAwait(false);
+
+            task.Sha256 = sha;
+            task.ThumbnailBase64 = thumb is null ? null : Convert.ToBase64String(thumb);
+            task.ThumbnailMimeType = thumb is null ? null : "image/jpeg";
+
+            // 缩略图计算完成后通知 UI 更新（任务卡片从扩展名图标切换为真实缩略图）
+            if (task.ThumbnailBase64 is not null)
+                _messenger.Send(new TransferThumbnailUpdatedMessage(task.FileId, task.ThumbnailBase64, task.ThumbnailMimeType));
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            task.ErrorMessage = $"准备失败: {ex.Message}";
+            SetState(task, task.State, TransferState.Failed);
+            return;
+        }
 
         var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
 

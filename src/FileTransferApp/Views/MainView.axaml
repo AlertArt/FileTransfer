@@ -259,7 +259,7 @@
                                                 BorderBrush="{DynamicResource Brush.Border}"
                                                 BorderThickness="1"
                                                 BoxShadow="{DynamicResource Shadow.Sm}">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                                                   ColumnSpacing="10" RowSpacing="5">
 
                                                 <!-- [缩略图 / 文件头像] -->
@@ -302,31 +302,38 @@
                                                 </Border>
 
                                                 <!-- [文件名 + 元信息行] -->
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                                    <TextBlock Text="{Binding FileName}"
-                                                               FontWeight="SemiBold"
-                                                               FontSize="14"
+                                                <!-- 直接用 TextBlock 而非 StackPanel：Grid 的 * 列会约束宽度，
+                                                     TextTrimming 才能正确生效；否则长文件名会把右侧操作按钮挤出可视区 -->
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding FileName}"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="14"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding MetaText}"
+                                                               Classes="Muted"
                                                                TextTrimming="CharacterEllipsis"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                                    <TextBlock Text="{Binding MetaText}" Classes="Muted" />
-                                                    <TextBlock Text="·" Foreground="{DynamicResource Brush.TextMuted}" />
-                                                    <TextBlock Text="{Binding StateText}"
+                                                               MaxWidth="160" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text=" · "
+                                                               Foreground="{DynamicResource Brush.TextMuted}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding StateText}"
                                                                FontWeight="SemiBold"
                                                                FontSize="12"
+                                                               TextTrimming="CharacterEllipsis"
                                                                Foreground="{Binding State, Converter={StaticResource StatusToColor}}" />
-                                                </StackPanel>
+                                                </Grid>
 
                                                 <!-- [进度条] -->
                                                 <ProgressBar Grid.Row="2" Grid.Column="1"
                                                              Minimum="0" Maximum="100"
                                                              Value="{Binding ProgressPercentage}" />
 
-                                                <!-- [速度 + 进度百分比] -->
-                                                <Grid Grid.Row="2" Grid.Column="1"
-                                                      Margin="0,0,0,-2"
-                                                      IsHitTestVisible="False">
+                                                <!-- [速度 + 进度百分比]：放在进度条下方独立行，避免与进度条叠加导致 Pad 端显示异常 -->
+                                                <Grid Grid.Row="3" Grid.Column="1" IsHitTestVisible="False">
                                                     <TextBlock Classes="Muted"
                                                                HorizontalAlignment="Left"
                                                                Text="{Binding SpeedText}" />
@@ -336,7 +343,7 @@
                                                 </Grid>
 
                                                 <!-- [错误提示行]：失败/断开/取消时显示红色错误原因 -->
-                                                <Border Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                                <Border Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                                                         Background="#FFFBF0"
                                                         BorderBrush="#FFB4A0"
                                                         BorderThickness="1"
@@ -350,7 +357,7 @@
                                                 </Border>
 
                                                 <!-- [操作按钮：暂停/恢复/取消/删除] -->
-                                                <StackPanel Grid.RowSpan="4" Grid.Column="2"
+                                                <StackPanel Grid.RowSpan="5" Grid.Column="2"
                                                             Orientation="Horizontal" Spacing="2"
                                                             VerticalAlignment="Center">
                                                     <Button Classes="Icon" Content="⏸"
