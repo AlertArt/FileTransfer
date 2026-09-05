@@ -1,0 +1,13 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:FileTransferApp.Views"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+        x:Class="FileTransferApp.Views.MainWindow"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="FileTransferApp · 跨平台局域网文件传输"
+        Width="960" Height="640" MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterScreen">
+    <views:MainView />
+</Window>

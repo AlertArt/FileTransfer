@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="src/FileTransferApp.Core/FileTransferApp.Core.csproj" />
+  <Project Path="src/FileTransferApp/FileTransferApp.csproj" />
+  <Project Path="src/FileTransferApp.Desktop/FileTransferApp.Desktop.csproj" />
+  <Project Path="src/FileTransferApp.Android/FileTransferApp.Android.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="src/FileTransferApp.iOS/FileTransferApp.iOS.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="tests/FileTransferApp.Core.Tests/FileTransferApp.Core.Tests.csproj" />
+</Solution>

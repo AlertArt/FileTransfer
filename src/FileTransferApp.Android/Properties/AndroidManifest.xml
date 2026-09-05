@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
+        <!-- SDK 版本声明：避免 Android 6-9 部分 ROM PackageManager 解析缺失 uses-sdk
+             时降级为 minSdk=1 / targetSdk=1 触发权限模型异常或解析失败。
+             minSdkVersion=23 (API 23 = Android 6.0 Marshmallow) 与 csproj SupportedOSPlatformVersion 一致。
+             targetSdkVersion 由 MSBuild 按 net10.0-android 默认 API Level 注入，此处显式声明兜底。 -->
+        <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="36" />
+
+        <!-- 网络通信 -->
+        <uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+	<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+	<!-- 前台服务保活（Android 9+ 用于 UDP 多播与 HTTP 传输监听后台持续运行） -->
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<!-- Android 14 (API 34+): dataSync 类型前台服务必须显式声明 -->
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+	<!-- Android 13 (API 33+): 前台通知需运行时申请 POST_NOTIFICATIONS -->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+	<!-- 启动时注册 UDP 多播 socket（部分 ROM 需要开机常驻） -->
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+	<!-- 部分厂商省电策略下需 WAKE_LOCK 维持 socket 活动 -->
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+	<!-- 存储权限：接收文件写入公共 Download 目录 -->
+	<!-- Android 10 (API 29) 及以下：WRITE_EXTERNAL_STORAGE + requestLegacyExternalStorage -->
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+	<!-- Android 11 (API 30)+：MANAGE_EXTERNAL_STORAGE 授予全部共享存储访问 -->
+	<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+	<!-- 应用：icon/drawable 名称与 obj 目录生成的图标保持一致。
+	     Resource.Drawable.Icon（csproj 默认生成）对应 @drawable/icon（小写，aapt 要求）。 -->
+	<application
+		android:label="FileTransferApp"
+		android:icon="@drawable/icon"
+		android:requestLegacyExternalStorage="true"
+		android:usesCleartextTraffic="true">
+		<!-- 文件传输前台服务：与 C# 端 ServiceAttribute 保持一一对应
+		     Name / foregroundServiceType / exported 三个值完全相同，
+		     避免 .NET for Android MSBuild 任务生成两份重复 service 或找不到声明。 -->
+		<service
+			android:name="com.CompanyName.FileTransferApp.TransferForegroundService"
+			android:exported="false"
+			android:foregroundServiceType="dataSync" />
+	</application>
+</manifest>

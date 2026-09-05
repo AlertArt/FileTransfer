@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--If you are willing to use platform-specific APIs, use conditional compilation.
+    See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 现代风格 App 图标：多尺寸嵌入的 ICO 文件。发布产物 exe 本身即带此图标。 -->
+    <ApplicationIcon>Assets\appicon.ico</ApplicationIcon>
+    <AssemblyTitle>快传 · Nearby Transfer</AssemblyTitle>
+    <Product>快传 · Nearby Transfer</Product>
+    <Description>跨平台（Windows/Android）局域网快传工具</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 将图标复制到发布目录，方便用户直接取 PNG/ICO。 -->
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileTransferApp\FileTransferApp.csproj" />
+  </ItemGroup>
+</Project>
