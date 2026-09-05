@@ -56,9 +56,17 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     public async Task<TransferTaskInfo> CreateSendTaskAsync(string filePath, DeviceNode peer, CancellationToken ct = default)
     {
-        var size = _storage.GetFileSize(filePath);
-        var sha = await _storage.ComputeSha256Async(filePath).ConfigureAwait(false);
-        var thumb = await _thumbnail.GenerateThumbnailAsync(filePath).ConfigureAwait(false);
+        // 关键：所有耗时 IO/CPU 操作（文件大小、SHA-256 全文件哈希、图片解码缩放）
+        // 必须放到线程池执行。否则从 UI 线程调用时（SendFilesAsync → CreateSendTaskAsync），
+        // GenerateThumbnailAsync 内部的 new Bitmap(filePath) 与 SHA256 计算会同步阻塞 UI 线程，
+        // 表现为"选完文件后界面卡死很久"。
+        var (size, sha, thumb) = await Task.Run(async () =>
+        {
+            var s = _storage.GetFileSize(filePath);
+            var hash = await _storage.ComputeSha256Async(filePath).ConfigureAwait(false);
+            var thumbnail = await _thumbnail.GenerateThumbnailAsync(filePath).ConfigureAwait(false);
+            return (s, hash, thumbnail);
+        }, ct).ConfigureAwait(false);
 
         var task = new TransferTaskInfo
         {
