@@ -5,6 +5,7 @@
              xmlns:vm="using:FileTransferApp.ViewModels"
              xmlns:models="using:FileTransferApp.Core.Models"
              xmlns:conv="using:FileTransferApp.Converters"
+             xmlns:svc="using:FileTransferApp.Services"
              mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="760"
              x:Class="FileTransferApp.Views.MainView"
              x:DataType="vm:MainViewModel"
@@ -105,7 +106,7 @@
                 <!-- 主操作：选择文件（标准模式：完整文字按钮） -->
                 <Button Grid.Column="2" Grid.RowSpan="2"
                         Classes="Primary"
-                        Content="📁 选择文件发送"
+                        Content="{svc:Localize Key=SelectFileSend}"
                         Command="{Binding SendFileCommand}"
                         IsEnabled="{Binding Devices.SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                         Padding="20,10"
@@ -173,13 +174,13 @@
                                   ColumnSpacing="8" RowSpacing="6">
                                 <TextBox Grid.Column="0"
                                          Text="{Binding Devices.ManualIp}"
-                                         PlaceholderText="目标 IP（如 192.168.1.17）" />
+                                         PlaceholderText="{svc:Localize Key=ManualIpPlaceholder}" />
                                 <Button Grid.Column="1"
-                                        Content="直连"
+                                        Content="{svc:Localize Key=Connect}"
                                         Command="{Binding ManualConnectCommand}" />
                                 <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
                                            Classes="Muted"
-                                           Text="{Binding Devices.ManualPort, StringFormat='{}端口: {0}，UDP 自动广播发现同一网段设备'}"
+                                           Text="{svc:Localize Key=PortHint, Args={Binding Devices.ManualPort}}"
                                            IsVisible="{Binding !IsCompact}" />
                             </Grid>
                         </Border>
@@ -233,11 +234,11 @@
                         <!-- 标题 + 提示 -->
                         <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left"
-                                       Text="传输任务"
+                                       Text="{svc:Localize Key=TransferTasks}"
                                        Classes="Title"
                                        FontSize="16" />
                             <TextBlock DockPanel.Dock="Right"
-                                       Text="拖拽文件到本区域即可发送"
+                                       Text="{svc:Localize Key=DragDropHint}"
                                        Classes="Muted"
                                        IsVisible="{Binding !IsCompact}"
                                        VerticalAlignment="Center" />
@@ -363,19 +364,19 @@
                                                     <Button Classes="Icon" Content="⏸"
                                                             Command="{Binding PauseCommand}"
                                                             IsVisible="{Binding IsRunning}"
-                                                            ToolTip.Tip="暂停" />
+                                                            ToolTip.Tip="{svc:Localize Key=Pause}" />
                                                     <Button Classes="Icon" Content="▶"
                                                             Command="{Binding ResumeCommand}"
                                                             IsVisible="{Binding IsPaused}"
-                                                            ToolTip.Tip="恢复" />
+                                                            ToolTip.Tip="{svc:Localize Key=Resume}" />
                                                     <Button Classes="Icon Danger" Content="✕"
                                                             Command="{Binding CancelCommand}"
                                                             IsVisible="{Binding CanCancel}"
-                                                            ToolTip.Tip="取消" />
+                                                            ToolTip.Tip="{svc:Localize Key=Cancel}" />
                                                     <Button Classes="Icon" Content="🗑"
                                                             Command="{Binding DeleteCommand}"
                                                             IsVisible="{Binding CanDelete}"
-                                                            ToolTip.Tip="删除任务" />
+                                                            ToolTip.Tip="{svc:Localize Key=DeleteTask}" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -400,15 +401,22 @@
                     <Ellipse Width="8" Height="8"
                              Fill="{DynamicResource Brush.Success}"
                              VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Devices.Devices.Count, StringFormat='在线: {0}'}"
+                    <TextBlock Text="{svc:Localize Key=OnlineLabel, Args={Binding Devices.Devices.Count}}"
                                Classes="Subtitle" />
                     <TextBlock Text="·" Foreground="{DynamicResource Brush.TextMuted}" />
-                    <TextBlock Text="{Binding Transfers.Count, StringFormat='任务: {0}'}"
+                    <TextBlock Text="{svc:Localize Key=TasksLabel, Args={Binding Transfers.Count}}"
                                Classes="Subtitle" />
                 </StackPanel>
-                <TextBlock Grid.Column="1" Classes="Muted" VerticalAlignment="Center"
-                           Text="拖拽文件 → 选择设备 → 开始传输"
-                           IsVisible="{Binding !IsCompact}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Classes="Muted" VerticalAlignment="Center"
+                               Text="{svc:Localize Key=DragDropFlow}"
+                               IsVisible="{Binding !IsCompact}" />
+                    <!-- 语言切换下拉框 -->
+                    <ComboBox x:Name="LanguageCombo"
+                              Width="110"
+                              SelectedIndex="0"
+                              SelectionChanged="OnLanguageChanged" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

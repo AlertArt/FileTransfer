@@ -25,9 +25,6 @@ public partial class MainViewModel : ObservableObject,
     IRecipient<TransferCompletedMessage>,
     IRecipient<TransferTaskRemovedMessage>
 {
-    private const string KeepAliveTitle = "FileTransferApp";
-    private const string KeepAliveContent = "正在传输文件，保持服务运行";
-
     private readonly IMessenger _messenger;
     private readonly ITransferEngine _engine;
     private readonly IDiscoveryService _discovery;
@@ -74,8 +71,11 @@ public partial class MainViewModel : ObservableObject,
         // 显示本机所有可达的 LAN IPv4（排除 127/169.254/多播段），
         // 这样 Android 用户在 UDP 广播不可达（AP隔离/随机MAC）环境下可直接把 IP 告知对端手动输入。
         var lanIps = GetLanIPv4Addresses();
-        var ipInfo = lanIps.Count > 0 ? $" · LAN IP: {string.Join(", ", lanIps)}" : "";
-        SelfInfo = $"{self.DeviceName} ({self.DeviceType}) · 传输端口 {self.Port}{ipInfo}";
+        _ipInfo = lanIps.Count > 0 ? $" · LAN IP: {string.Join(", ", lanIps)}" : "";
+        _selfName = self.DeviceName;
+        _selfType = self.DeviceType.ToString();
+        _selfPort = self.Port;
+        RefreshSelfInfo();
         // 构造完毕时设备列表手动选中逻辑：订阅设备列表变化，当有新设备出现时自动选中
         Devices.Devices.CollectionChanged += (_, e) =>
         {
@@ -84,6 +84,25 @@ public partial class MainViewModel : ObservableObject,
         };
 
         _messenger.RegisterAll(this);
+
+        // 监听语言切换：刷新 SelfInfo
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private string _ipInfo = "";
+    private string _selfName = "";
+    private string _selfType = "";
+    private int _selfPort;
+
+    private void RefreshSelfInfo()
+    {
+        SelfInfo = LocalizationService.Instance.Format("SelfInfo", _selfName, _selfType, _selfPort, _ipInfo);
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not ("Item[]" or "")) return;
+        Dispatcher.UIThread.Post(RefreshSelfInfo);
     }
 
     public void Receive(TransferStatusChangedMessage message)
@@ -95,7 +114,9 @@ public partial class MainViewModel : ObservableObject,
             var item = Transfers.FirstOrDefault(t => t.FileId == message.FileId);
             item?.ApplyStateChange(message.NewState);
             // 委托协调器：根据本次状态变化同步保活开关（内部去重，避免重复调用平台 API）
-            _keepAlive.OnTaskStateChanged(message.FileId, message.NewState, KeepAliveTitle, KeepAliveContent);
+            _keepAlive.OnTaskStateChanged(message.FileId, message.NewState,
+                LocalizationService.Instance.GetString("KeepAliveTitle"),
+                LocalizationService.Instance.GetString("KeepAliveContent"));
         });
     }
 
@@ -107,7 +128,9 @@ public partial class MainViewModel : ObservableObject,
             // 手动转发完成事件：防止 TransferItemViewModel 注册前的消息丢失（竞态）
             var item = Transfers.FirstOrDefault(t => t.FileId == message.FileId);
             item?.ApplyCompleted(message.Success);
-            _keepAlive.OnTaskCompleted(message.FileId, message.Success, KeepAliveTitle, KeepAliveContent);
+            _keepAlive.OnTaskCompleted(message.FileId, message.Success,
+                LocalizationService.Instance.GetString("KeepAliveTitle"),
+                LocalizationService.Instance.GetString("KeepAliveContent"));
         });
     }
 
@@ -176,7 +199,7 @@ public partial class MainViewModel : ObservableObject,
             var fallback = new DeviceNode
             {
                 DeviceId = "manual:" + Devices.ManualIp + ":" + port,
-                DeviceName = $"手动直连 {Devices.ManualIp}:{port}",
+                DeviceName = LocalizationService.Instance.Format("ManualConnectName", Devices.ManualIp, port),
                 DeviceType = DeviceType.Unknown,
                 IpAddress = ip,
                 Port = port,

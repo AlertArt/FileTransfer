@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using FileTransferApp.Core.Messaging;
 using FileTransferApp.Core.Models;
 using FileTransferApp.Core.Services.Interfaces;
+using FileTransferApp.Services;
 
 namespace FileTransferApp.ViewModels;
 
@@ -73,6 +74,19 @@ public partial class TransferItemViewModel : ObservableObject,
         ThumbnailImage = ParseThumbnail(task.ThumbnailBase64);
 
         _messenger.RegisterAll(this);
+
+        // 监听语言切换：重新生成状态文本与方向标签
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not ("Item[]" or "")) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            StateText = StateToText(State);
+            MetaText = BuildMetaText(Direction, TotalBytes);
+        });
     }
 
     public void Receive(TransferProgressMessage message)
@@ -220,26 +234,31 @@ public partial class TransferItemViewModel : ObservableObject,
         CanDelete = IsTerminal;
     }
 
-    private static string StateToText(TransferState s) => s switch
+    private static string StateToText(TransferState s)
     {
-        TransferState.Created => "已创建",
-        TransferState.Preparing => "握手中",
-        TransferState.WaitingApproval => "等待接收",
-        TransferState.Transferring => "传输中",
-        TransferState.Paused => "已暂停",
-        TransferState.Disconnected => "已断开",
-        TransferState.Completed => "已完成",
-        TransferState.Failed => "失败",
-        TransferState.Cancelled => "已取消",
-        _ => s.ToString(),
-    };
+        var key = s switch
+        {
+            TransferState.Created => "State.Created",
+            TransferState.Preparing => "State.Preparing",
+            TransferState.WaitingApproval => "State.WaitingApproval",
+            TransferState.Transferring => "State.Transferring",
+            TransferState.Paused => "State.Paused",
+            TransferState.Disconnected => "State.Disconnected",
+            TransferState.Completed => "State.Completed",
+            TransferState.Failed => "State.Failed",
+            TransferState.Cancelled => "State.Cancelled",
+            _ => s.ToString(),
+        };
+        return LocalizationService.Instance.GetString(key);
+    }
 
     private static string FormatSpeed(double bytesPerSecond)
         => Core.Services.Impl.SpeedFormatter.FormatSpeed(bytesPerSecond);
 
     private static string BuildMetaText(TransferDirection dir, long totalBytes)
     {
-        var dirText = dir == TransferDirection.Send ? "发送" : "接收";
+        var dirKey = dir == TransferDirection.Send ? "Direction.Send" : "Direction.Receive";
+        var dirText = LocalizationService.Instance.GetString(dirKey);
         return $"[{dirText}] {Core.Services.Impl.SpeedFormatter.FormatSize(totalBytes)}";
     }
 

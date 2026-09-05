@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using FileTransferApp.Services;
 using FileTransferApp.ViewModels;
 
 namespace FileTransferApp.Views;
@@ -28,6 +30,26 @@ public partial class MainView : UserControl
         AddHandler(DragDrop.DropEvent, OnDrop);
         // 监听控件尺寸变化：驱动响应式布局
         LayoutUpdated += MainView_LayoutUpdated;
+
+        InitializeLanguageCombo();
+    }
+
+    private void InitializeLanguageCombo()
+    {
+        if (LanguageCombo is null) return;
+        LanguageCombo.ItemsSource = LocalizationService.SupportedLanguages
+            .Select(l => l.DisplayName)
+            .ToList();
+        var current = LocalizationService.Instance.CurrentLanguage;
+        var idx = Array.FindIndex(LocalizationService.SupportedLanguages, l => l.Code == current);
+        LanguageCombo.SelectedIndex = idx >= 0 ? idx : 0;
+    }
+
+    private void OnLanguageChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (LanguageCombo is null || LanguageCombo.SelectedIndex < 0) return;
+        var lang = LocalizationService.SupportedLanguages[LanguageCombo.SelectedIndex];
+        LocalizationService.Instance.SetLanguage(lang.Code);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
