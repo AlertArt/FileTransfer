@@ -9,16 +9,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationId>com.CompanyName.FileTransferApp</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
 
     <!-- ====== 修复「解析包时出现问题」的 3 项关键配置 ====== -->
     <!-- (1) ABI：同时输出 arm64-v8a (64位主流) + armeabi-v7a (32位兼容中低端/旧机)。
              仅 64 位会在 32 位设备上报 INSTALL_FAILED_NO_MATCHING_ABIS，表现为"解析包错误"。
-             .NET for Android 标准属性名是 AndroidSupportedAbis（分号分隔，大小写敏感），
-             在 Build+Publish 全流程中生效，移除 x86_64 进一步减包体（真机极少见 x86_64）。 -->
-    <AndroidSupportedAbis>arm64-v8a;armeabi-v7a</AndroidSupportedAbis>
+             使用 RuntimeIdentifiers（android-arm=armeabi-v7a, android-arm64=arm64-v8a），
+             .NET for Android 官方推荐属性，替代已废弃的 AndroidSupportedAbis。 -->
+    <RuntimeIdentifiers>android-arm;android-arm64</RuntimeIdentifiers>
 
     <!-- (2) 签名方案：V1 (JAR签名，Android 7- 必需) + V2 (整包签名，Android 7+ 必需)
              仅 V2 无 V1 会在 Android 6 及以下出现解析失败 -->
