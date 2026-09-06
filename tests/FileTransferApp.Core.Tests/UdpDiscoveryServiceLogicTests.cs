@@ -60,7 +60,7 @@ public class UdpDiscoveryServiceLogicTests
     // ---- IMessenger 去重契约：同 DeviceId 再次触发不重复注册 ----
 
     [Fact]
-    public void Messenger_DeviceDiscoveredMessage_Is_Sent_For_New_Nodes()
+    public async Task Messenger_DeviceDiscoveredMessage_Is_Sent_For_New_Nodes()
     {
         var messenger = WeakReferenceMessenger.Default;
         var svc = new UdpDiscoveryService(messenger, "UT-Machine", DeviceType.Windows);
@@ -72,7 +72,7 @@ public class UdpDiscoveryServiceLogicTests
         // 直接用反射调用 ReceiveLoopAsync 内部的 ProcessHeartbeat 太繁琐，
         // 这里改为调用 ConnectDirect 对无效 IP，观察 Service 不抛异常并返回 false
         // （集成测试中会实际收到心跳）
-        var ok = svc.ConnectDirectAsync(IPAddress.Parse("127.0.0.1"), 1).GetAwaiter().GetResult();
+        var ok = await svc.ConnectDirectAsync(IPAddress.Parse("127.0.0.1"), 1);
 
         // 无效端口：多数情况下 UDP 可发出但无回包，ConnectDirect 仅保证不抛
         // 返回 true 当 SendAsync 成功（不代表对端在线）

@@ -179,7 +179,7 @@ public class TransferHttpServerTests
         var (status, json) = await server.HandleChunkAsync(req);
         Assert.Equal(404, status);
         // JSON 默认对中文做 Unicode 转义，用反序列化后比较
-        var err = JsonSerializer.Deserialize<JsonError>(json);
+        var err = ParseError(json);
         Assert.NotNull(err);
         Assert.Contains("任务不存在", err!.Error);
     }
@@ -282,7 +282,7 @@ public class TransferHttpServerTests
             "GET", path, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), Array.Empty<byte>());
         var status = RouteDispatchStatus(server, req);
         Assert.Equal(expectedStatus, status.status);
-        var err = JsonSerializer.Deserialize<JsonError>(status.json);
+        var err = ParseError(status.json);
         Assert.NotNull(err);
         Assert.Contains("Not Found", err!.Error);
     }
@@ -309,7 +309,7 @@ public class TransferHttpServerTests
             "POST", ProtocolConstants.PathChunk, headers, new byte[1024]);
         var (status, json) = await server.HandleChunkAsync(req);
         Assert.Equal(409, status);
-        var err = JsonSerializer.Deserialize<JsonError>(json);
+        var err = ParseError(json);
         Assert.NotNull(err);
         Assert.Contains("拒绝写入", err!.Error);
     }
@@ -360,7 +360,7 @@ public class TransferHttpServerTests
             "POST", ProtocolConstants.PathChunk, headers, new byte[512]);
         var (status, json) = await server.HandleChunkAsync(req);
         Assert.Equal(200, status);
-        var resp = JsonSerializer.Deserialize<ChunkRespStub>(json);
+        var resp = JsonSerializer.Deserialize<ChunkRespStub>(json, CiOpts);
         Assert.NotNull(resp);
         Assert.Equal(0, resp!.ChunkIndex);
         Assert.Equal("Success", resp.Status);
@@ -399,6 +399,13 @@ public class TransferHttpServerTests
     public sealed class ChunkRespStub { public int ChunkIndex { get; set; } public string? Status { get; set; } }
     // ====== helpers ======
 
+    // TransferHttpServer 按设计规范（§4.2）以 camelCase 序列化响应体（{"chunkIndex":..,"status":..}）。
+    // 真实客户端以 case-insensitive 反序列化；测试必须与之一致，否则 Error/Status 等字段绑定不上。
+    private static readonly JsonSerializerOptions CiOpts = new() { PropertyNameCaseInsensitive = true };
+
+    private static JsonError? ParseError(string json) =>
+        JsonSerializer.Deserialize<JsonError>(json, CiOpts);
+
     private static TransferHttpServer NewServer(out MockEngine engine)
     {
         engine = new MockEngine();
@@ -421,7 +428,9 @@ public class TransferHttpServerTests
         public readonly Dictionary<string, TransferTaskInfo> Tasks = new();
         public readonly List<(string FileId, TransferAction Action)> ControlCalls = new();
 
+#pragma warning disable CS0067 // mock 不主动触发状态事件，供接口签名占位
         public event EventHandler<TransferStatusChangedMessage>? StateChanged;
+#pragma warning restore CS0067
 
         public Task PauseAsync(string fileId)
         {
@@ -438,6 +447,12 @@ public class TransferHttpServerTests
         public Task CancelAsync(string fileId)
         {
             ControlCalls.Add((fileId, TransferAction.CANCEL));
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveTaskAsync(string fileId)
+        {
+            Tasks.Remove(fileId);
             return Task.CompletedTask;
         }
 

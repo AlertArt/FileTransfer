@@ -25,6 +25,3 @@ public record TransferTaskRemovedMessage(string FileId);
 
 // ---- 任务缩略图更新事件（接收完成后重新生成缩略图）----
 public record TransferThumbnailUpdatedMessage(string FileId, string ThumbnailBase64, string? MimeType);
-
-// ---- 新接收请求（需 UI 审批）事件 ----
-public record IncomingTransferRequestMessage(Models.FileMetadata Metadata, string PeerEndPoint);

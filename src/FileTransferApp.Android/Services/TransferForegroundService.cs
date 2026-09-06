@@ -77,8 +77,12 @@ public sealed class TransferForegroundService : Service
     {
         try
         {
-            StopForeground(StopForegroundFlags.Remove);
-            NotificationManagerCompat.From(this).Cancel(NotificationId);
+            // StopForeground(StopForegroundFlags) 仅 Android 24+；旧版本回退基础重载
+            if (OperatingSystem.IsAndroidVersionAtLeast(24))
+                StopForeground(StopForegroundFlags.Remove);
+            else
+                StopForeground(true);
+            NotificationManagerCompat.From(this)!.Cancel(NotificationId);
         }
         catch { /* ignore */ }
         base.OnDestroy();
@@ -92,14 +96,14 @@ public sealed class TransferForegroundService : Service
         try
         {
             var n = BuildNotificationSafe(context, title, content);
-            NotificationManagerCompat.From(context).Notify(NotificationId, n);
+            NotificationManagerCompat.From(context)!.Notify(NotificationId, n);
         }
         catch
         {
             // 资源异常：尝试 fallback 后仍失败就跳过
             try
             {
-                NotificationManagerCompat.From(context)
+                NotificationManagerCompat.From(context)!
                     .Notify(NotificationId, BuildFallbackNotification(title, content));
             }
             catch { /* ignore */ }
@@ -154,7 +158,7 @@ public sealed class TransferForegroundService : Service
 
     private void EnsureNotificationChannelSafe()
     {
-        if (Build.VERSION.SdkInt < BuildVersionCodes.O) return;
+        if (!OperatingSystem.IsAndroidVersionAtLeast(26)) return;
         var mgr = (NotificationManager)GetSystemService(NotificationService)!;
         if (mgr is null) return;
         try
@@ -179,6 +183,7 @@ public sealed class TransferForegroundService : Service
 
     private static void TryApplyNoBadge(NotificationChannel channel)
     {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(26)) return;
         try { channel.SetShowBadge(false); }
         catch (MissingMethodException) { /* ignore on older bindings */ }
         catch (Java.Lang.NoSuchMethodError) { /* ignore */ }
@@ -193,6 +198,9 @@ public sealed class TransferForegroundService : Service
     /// </summary>
     internal static Notification BuildNotificationSafe(Context context, string title, string content)
     {
+        // AndroidX 绑定将 Java 流式 Builder 的构造与全链方法返回标注为可空，
+        // 运行期必然非空；统一抑制 nullable 告警避免噪音。
+#pragma warning disable CS8600, CS8602, CS8603
         NotificationCompat.Builder builder;
         int appIconId = GetAppIconResourceId();
         try
@@ -220,6 +228,7 @@ public sealed class TransferForegroundService : Service
                 .SetCategory(NotificationCompat.CategoryService);
         }
         return builder.Build();
+#pragma warning restore CS8600, CS8602, CS8603
     }
 
     /// <summary>
@@ -262,6 +271,7 @@ public sealed class TransferForegroundService : Service
     /// </summary>
     private static Notification BuildFallbackNotification(string title, string content)
     {
+#pragma warning disable CS8600, CS8602, CS8603 // AndroidX 绑定：流式 Builder 全链可空标注，运行期非空
         try
         {
             var ctx = global::Android.App.Application.Context;
@@ -281,6 +291,7 @@ public sealed class TransferForegroundService : Service
             return new Notification(); // 极简占位通知，至少保证 StartForeground 能入参
 #pragma warning restore CA1416
         }
+#pragma warning restore CS8600, CS8602, CS8603
     }
 
     private static int GetFallbackIconId()

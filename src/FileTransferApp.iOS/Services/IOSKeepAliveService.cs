@@ -76,7 +76,12 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     {
         DispatchQueue.MainQueue.DispatchAsync(() =>
         {
-            var vc = UIApplication.SharedApplication.KeyWindow?.RootViewController;
+            // iOS 13+ 多场景：用 ConnectedScenes 查找前台活跃场景的 KeyWindow，
+            // 替代已过时的 UIApplication.KeyWindow（多场景会跨所有 scene 混淆窗口）。
+            var vc = UIApplication.SharedApplication.ConnectedScenes
+                .OfType<UIWindowScene>()
+                .FirstOrDefault(s => s.ActivationState == UISceneActivationState.ForegroundActive)
+                ?.Windows.FirstOrDefault(w => w.IsKeyWindow)?.RootViewController;
             if (vc is null) return;
             // 取最上层 presented VC，避免被模态遮挡
             while (vc.PresentedViewController is not null) vc = vc.PresentedViewController;

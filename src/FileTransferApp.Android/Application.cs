@@ -45,7 +45,7 @@ namespace FileTransferApp.Android
                 if (wifiManager is not null)
                 {
                     var multicastLock = wifiManager.CreateMulticastLock("FileTransferApp_Discovery");
-                    multicastLock.Acquire();
+                    if (multicastLock is not null) multicastLock.Acquire();
                     global::Android.Util.Log.Info("FTA.BOOT", "MulticastLock acquired OK");
                 }
             }

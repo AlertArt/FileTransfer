@@ -190,7 +190,9 @@ public class TransferItemViewModel_StateFlags_Tests
     // ---- helpers ----
     private sealed class NSubstituteEngine : ITransferEngine
     {
+#pragma warning disable CS0067 // mock 不主动触发状态事件，供接口签名占位
         public event EventHandler<Core.Messaging.TransferStatusChangedMessage>? StateChanged;
+#pragma warning restore CS0067
         public Task ApplyControlAsync(string fileId, TransferAction action) => Task.CompletedTask;
         public Task CancelAsync(string fileId) => Task.CompletedTask;
         public Task<TransferTaskInfo> CreateSendTaskAsync(string filePath, DeviceNode peer, CancellationToken ct = default) => throw new System.NotSupportedException();
@@ -199,6 +201,7 @@ public class TransferItemViewModel_StateFlags_Tests
         public Task PauseAsync(string fileId) => Task.CompletedTask;
         public Task<PrepareResponse> RegisterReceiveTaskAsync(PrepareRequest prepare, DeviceNode peer) => throw new System.NotSupportedException();
         public Task ResumeAsync(string fileId) => Task.CompletedTask;
+        public Task RemoveTaskAsync(string fileId) => Task.CompletedTask;
         public Task StartSendAsync(string fileId, CancellationToken ct = default) => throw new System.NotSupportedException();
         public Task<bool> WriteChunkAsync(string fileId, int chunkIndex, int totalChunks, ReadOnlyMemory<byte> data) => throw new System.NotSupportedException();
     }

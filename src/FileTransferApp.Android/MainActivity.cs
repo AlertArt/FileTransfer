@@ -103,7 +103,7 @@ public class MainActivity : AvaloniaMainActivity
     /// <summary>Android 13 (API 33+) 起前台通知需运行时申请 POST_NOTIFICATIONS</summary>
     private void RequestNotificationPermissionIfNeeded()
     {
-        if (Build.VERSION.SdkInt < BuildVersionCodes.Tiramisu) return;
+        if (!OperatingSystem.IsAndroidVersionAtLeast(33)) return;
         if (CheckSelfPermission(global::Android.Manifest.Permission.PostNotifications) == Permission.Granted) return;
 
         ActivityCompat.RequestPermissions(
@@ -128,7 +128,7 @@ public class MainActivity : AvaloniaMainActivity
                 new[] { global::Android.Manifest.Permission.WriteExternalStorage },
                 StoragePermissionRequestCode);
         }
-        else
+        else if (OperatingSystem.IsAndroidVersionAtLeast(30))
         {
             // Android 11+：不在此处跳转设置页（会干扰 Activity 生命周期和 Avalonia 渲染）
             // 模拟器 permissive SELinux 默认放行；真机需在用户首次接收文件时引导
@@ -181,7 +181,7 @@ public class MainActivity : AvaloniaMainActivity
         }
     }
 
-    /// <summary>崩溃日志路径：外部 files/ 目录（/sdcard/Android/data/<pkg>/files/crash.log）
+    /// <summary>崩溃日志路径：外部 files/ 目录（/sdcard/Android/data/&lt;pkg&gt;/files/crash.log）
     /// 即使 Release 包也能通过 `adb pull /sdcard/Android/data/com.CompanyName.FileTransferApp/files/crash.log` 直接取，
     /// 避免 run-as 依赖 debuggable 属性让我们拿不到崩溃证据。
     /// 注意：Android 4.4+ 外部私有目录无需 WRITE_EXTERNAL_STORAGE 权限即可写入。</summary>
@@ -251,15 +251,18 @@ public class MainActivity : AvaloniaMainActivity
         {
             try
             {
+                // Java 侧回调实际必传非空；Thread.Id 在 Android 36+ 标记过时，仅用于崩溃日志诊断
+#pragma warning disable CA1422 // 日志用途，无需改版
                 LogFatal(
                     $"JavaUncaught:thread={thread?.Id}-{thread?.Name}",
                     throwable ?? new Java.Lang.RuntimeException("no throwable"));
+#pragma warning restore CA1422
             }
             catch
             {
                 // 崩溃处理器自身绝不能抛，否则就没有后续处理器机会了
             }
-            _original?.UncaughtException(thread, throwable);
+            _original?.UncaughtException(thread!, throwable!);
         }
     }
 }

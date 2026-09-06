@@ -122,7 +122,7 @@ public class ChunkBitmapAdvancedTests
     }
 
     [Fact]
-    public void Concurrent_Missing_Does_Not_Throw()
+    public async Task Concurrent_Missing_Does_Not_Throw()
     {
         const int n = 2000;
         var bm = new ChunkBitmap(n);
@@ -131,7 +131,7 @@ public class ChunkBitmapAdvancedTests
         int[] r = null!, m = null!;
         var t1 = Task.Run(() => r = bm.Received);
         var t2 = Task.Run(() => m = bm.Missing);
-        Task.WaitAll(t1, t2);
+        await Task.WhenAll(t1, t2);
 
         Assert.Equal(n, r.Length);
         Assert.Empty(m);

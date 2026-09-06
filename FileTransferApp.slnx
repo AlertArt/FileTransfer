@@ -9,4 +9,5 @@
     <Deploy />
   </Project>
   <Project Path="tests/FileTransferApp.Core.Tests/FileTransferApp.Core.Tests.csproj" />
+  <Project Path="tests/FileTransferApp.Tests/FileTransferApp.Tests.csproj" />
 </Solution>

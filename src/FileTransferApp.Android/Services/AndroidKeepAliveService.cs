@@ -36,7 +36,7 @@ public sealed class AndroidKeepAliveService : IPlatformKeepAliveService
         try
         {
             // Android 8.0+ 必须使用 StartForegroundService 显式启动 FG 服务
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            if (OperatingSystem.IsAndroidVersionAtLeast(26))
                 _context.StartForegroundService(intent);
             else
 #pragma warning disable CA1416 // 旧 API 等价调用
