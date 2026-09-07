@@ -29,6 +29,12 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     private readonly ConcurrentDictionary<string, SpeedCalculator> _speeds = new();
     private readonly ConcurrentDictionary<string, Stream> _receiveStreams = new();
 
+    /// <summary>逐任务进度推送节流：上次推送的时间戳 (Environment.TickCount64, ms)</summary>
+    private readonly ConcurrentDictionary<string, long> _lastProgressTickMs = new();
+    /// <summary>大文件（数百 MB）按 64KB 切片会有上万条进度消息，
+    /// 全量 Post 到 UI 线程会造成明显卡顿，限制到 ~10Hz/任务。</summary>
+    private const int ProgressPublishIntervalMs = 100;
+
     public PipelinesTransferEngine(
         IStorageService storage,
         IThumbnailService thumbnail,
@@ -619,6 +625,14 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     private void PublishProgress(TransferTaskInfo task, SpeedCalculator speed)
     {
+        // 限频推送：避免大文件（上万切片）向 UI 线程注入海量消息导致卡顿。
+        // 最后一帧（BytesTransferred >= TotalBytes）必须推，保证进度收尾准确。
+        var now = Environment.TickCount64;
+        var last = _lastProgressTickMs.TryGetValue(task.FileId, out var v) ? v : long.MinValue;
+        if (now - last < ProgressPublishIntervalMs && task.BytesTransferred < task.TotalBytes)
+            return;
+        _lastProgressTickMs[task.FileId] = now;
+
         _messenger.Send(new TransferProgressMessage(
             task.FileId, task.BytesTransferred, task.TotalBytes, speed.GetSpeedBytesPerSecond()));
     }

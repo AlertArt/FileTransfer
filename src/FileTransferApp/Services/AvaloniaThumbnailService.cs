@@ -17,6 +17,12 @@ public sealed class AvaloniaThumbnailService : IThumbnailService
         ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".ico"
     };
 
+    /// <summary>
+    /// 超过该大小跳过缩略图：超大图片（数百 MB 全景/扫描件）会整幅解码，
+    /// 造成数秒级阻塞与数 GB 内存峰值，预览价值远低于代价。
+    /// </summary>
+    private const long MaxThumbnailFileSizeBytes = 64L * 1024 * 1024;
+
     public Task<byte[]?> GenerateThumbnailAsync(string filePath, int maxWidth = 128, int maxHeight = 128)
     {
         byte[]? result = null;
@@ -26,6 +32,10 @@ public sealed class AvaloniaThumbnailService : IThumbnailService
 
         try
         {
+            // 大文件直接跳过（见 MaxThumbnailFileSizeBytes 注释）
+            if (!File.Exists(filePath) || new FileInfo(filePath).Length > MaxThumbnailFileSizeBytes)
+                return Task.FromResult<byte[]?>(null);
+
             using var src = new Bitmap(filePath);
             // 等比缩放，保持宽高比
             double scale = Math.Min(
