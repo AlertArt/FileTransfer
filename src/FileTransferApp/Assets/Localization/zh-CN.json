@@ -14,6 +14,7 @@
   "DragDropFlow": "拖拽文件 → 选择设备 → 开始传输",
   "Pause": "暂停",
   "Resume": "恢复",
+  "Retry": "重试",
   "Cancel": "取消",
   "DeleteTask": "删除任务",
   "State.Created": "已创建",

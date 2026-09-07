@@ -38,6 +38,7 @@ public class TransferStateMachineTests
     [InlineData(TransferState.Disconnected, TransferState.Paused)]
     [InlineData(TransferState.Disconnected, TransferState.Cancelled)]
     [InlineData(TransferState.Disconnected, TransferState.Failed)]
+    [InlineData(TransferState.Failed, TransferState.Transferring)] // 失败后支持重试
     public void CanTransition_Allows_Legal_Transitions(TransferState from, TransferState to)
     {
         Assert.True(TransferStateMachine.CanTransition(from, to));
@@ -54,7 +55,6 @@ public class TransferStateMachineTests
     [InlineData(TransferState.Transferring, TransferState.Created)]  // 不可回溯
     [InlineData(TransferState.Paused, TransferState.Completed)]       // 必须先恢复
     [InlineData(TransferState.Completed, TransferState.Transferring)] // 终态不可再变
-    [InlineData(TransferState.Failed, TransferState.Transferring)]
     [InlineData(TransferState.Cancelled, TransferState.Transferring)]
     [InlineData(TransferState.Cancelled, TransferState.Failed)]
     public void CanTransition_Rejects_Illegal_Transitions(TransferState from, TransferState to)
@@ -145,6 +145,17 @@ public class TransferStateMachineTests
         var current2 = TransferState.Disconnected;
         current2 = TransferStateMachine.EnsureTransition(current2, TransferState.Cancelled);
         Assert.True(TransferStateMachine.IsTerminal(current2));
+    }
+
+    [Fact]
+    public void Failed_Can_Retry_Back_To_Transferring_Then_Complete()
+    {
+        // 发送/接收失败 -> 用户点击"重试" -> 回到 Transferring 继续剩余切片 -> 完成
+        var current = TransferState.Failed;
+        current = TransferStateMachine.EnsureTransition(current, TransferState.Transferring);
+        Assert.Equal(TransferState.Transferring, current);
+        current = TransferStateMachine.EnsureTransition(current, TransferState.Completed);
+        Assert.True(TransferStateMachine.IsTerminal(current));
     }
 
     [Fact]

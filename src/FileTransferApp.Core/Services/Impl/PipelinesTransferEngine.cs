@@ -320,19 +320,45 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         await ResumeSendAsync(task).ConfigureAwait(false);
     }
 
+    public async Task RetryAsync(string fileId)
+    {
+        if (!_tasks.TryGetValue(fileId, out var task)) return;
+        if (task.State is not (TransferState.Disconnected or TransferState.Failed)) return;
+
+        if (task.Direction == TransferDirection.Receive)
+        {
+            // 接收方向是被动方：同步状态并通知发送端重新推送。
+            // 发送端若仍保留任务（Disconnected/Failed）会经 ResumeSendAsync 重新握手；
+            // 若任务已不存在，接收端会重新 /prepare 走全新注册（审批 + 全量重收）。
+            SetState(task, task.State, TransferState.Transferring);
+            NotifyPeerControlAsync(task, TransferAction.RESUME);
+            return;
+        }
+
+        await ResumeSendAsync(task).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// 发送任务的续传核心：重新握手获取对端最新 Bitmap，再推送缺失切片。
-    /// 供两个入口复用：本端点击"恢复"(ResumeAsync)、对端发起恢复(ApplyControlAsync RESUME)。
+    /// 供多个入口复用：本端点击"恢复"(ResumeAsync)、对端发起恢复(ApplyControlAsync RESUME)、本端/对端重试(RetryAsync)。
     /// 重入保护：同一任务同一时刻只允许一条续传链路，避免双循环重复推送。
     /// </summary>
     private async Task ResumeSendAsync(TransferTaskInfo task)
     {
-        if (task.State != TransferState.Paused) return;
+        var from = task.State;
+        if (from is not (TransferState.Paused or TransferState.Disconnected or TransferState.Failed)) return;
         if (!_resuming.TryAdd(task.FileId, 0)) return;
         try
         {
             task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
-            SetState(task, TransferState.Paused, TransferState.Transferring);
+            if (from is TransferState.Disconnected or TransferState.Failed)
+            {
+                // 重试：先清除旧的失败标记，重新进入握手
+                task.ErrorMessage = string.Empty;
+                task.ErrorCode = string.Empty;
+                task.ErrorArgs = null;
+            }
+            SetState(task, from, TransferState.Transferring);
 
             // 通知对端恢复为 Transferring（若对端此前也处于 Paused）。
             // 必须在重新握手/发片前发起，尽量消除"对端仍在 Paused → 首个切片被 409 拒绝"的竞态；

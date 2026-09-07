@@ -444,6 +444,12 @@ public class TransferHttpServerTests
             return Task.CompletedTask;
         }
 
+        public Task RetryAsync(string fileId)
+        {
+            ControlCalls.Add((fileId, TransferAction.RESUME));
+            return Task.CompletedTask;
+        }
+
         public Task CancelAsync(string fileId)
         {
             ControlCalls.Add((fileId, TransferAction.CANCEL));

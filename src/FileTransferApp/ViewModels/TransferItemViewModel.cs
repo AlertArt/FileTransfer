@@ -48,6 +48,8 @@ public partial class TransferItemViewModel : ObservableObject,
     [ObservableProperty] public partial bool CanCancel { get; set; }
     /// <summary>任务在终态（已完成/失败/已取消）：显示删除按钮</summary>
     [ObservableProperty] public partial bool CanDelete { get; set; }
+    /// <summary>任务出错（断开/失败）：显示重试按钮，重新握手并续传剩余切片</summary>
+    [ObservableProperty] public partial bool CanRetry { get; set; }
     /// <summary>
     /// 错误/警告信息：失败 / 已断开 / 已取消时展示，用于用户自助排查。
     /// 取值来源：TransferTaskInfo.ErrorMessage（由引擎填充），空串表示无错误信息不显示。
@@ -228,6 +230,9 @@ public partial class TransferItemViewModel : ObservableObject,
     private Task ResumeAsync() => _engine.ResumeAsync(FileId);
 
     [RelayCommand]
+    private Task RetryAsync() => _engine.RetryAsync(FileId);
+
+    [RelayCommand]
     private Task CancelAsync() => _engine.CancelAsync(FileId);
 
     [RelayCommand]
@@ -242,6 +247,8 @@ public partial class TransferItemViewModel : ObservableObject,
         // 非 Created 且非终态 → 可取消（等待审批、传输中、暂停、断开）
         CanCancel = s != TransferState.Created && !IsTerminal;
         CanDelete = IsTerminal;
+        // 断开 / 失败 → 可重试（重新握手 + 续传）
+        CanRetry = s is TransferState.Disconnected or TransferState.Failed;
     }
 
     private static string StateToText(TransferState s)

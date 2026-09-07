@@ -7,7 +7,7 @@ namespace FileTransferApp.Core.Services.Impl;
 /// 流转图：
 ///   Created -> Preparing -> WaitingApproval -> Transferring <-> Paused
 ///                                            -> Disconnected -> ...
-///   任何活动状态可 -> Failed / Cancelled；Disconnected 可恢复至 Transferring
+///   任何活动状态可 -> Failed / Cancelled；Disconnected / Failed 可恢复至 Transferring（断线/失败可重试）
 /// </summary>
 public static class TransferStateMachine
 {
@@ -20,7 +20,8 @@ public static class TransferStateMachine
         [TransferState.Paused] = new() { TransferState.Transferring, TransferState.Disconnected, TransferState.Cancelled, TransferState.Failed },
         [TransferState.Disconnected] = new() { TransferState.Transferring, TransferState.Paused, TransferState.Cancelled, TransferState.Failed },
         [TransferState.Completed] = new(),
-        [TransferState.Failed] = new(),
+        // Failed 可在用户点击"重试"时回到 Transferring（复用续传链路重新握手+补片）
+        [TransferState.Failed] = new() { TransferState.Transferring },
         [TransferState.Cancelled] = new(),
     };
 

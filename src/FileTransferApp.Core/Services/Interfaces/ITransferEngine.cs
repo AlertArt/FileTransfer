@@ -20,6 +20,8 @@ public interface ITransferEngine
     // ---- 控制命令 (发送方 / 接收方通用) ----
     Task PauseAsync(string fileId);
     Task ResumeAsync(string fileId);
+    /// <summary>重试失败任务（Disconnected / Failed）：发送方向重新握手+推送缺失切片，接收方向通知对端重推</summary>
+    Task RetryAsync(string fileId);
     Task CancelAsync(string fileId);
 
     /// <summary>从引擎中移除任务（仅在终态时允许，发送 TransferTaskRemovedMessage）。若任务非终态会先 Cancel。</summary>

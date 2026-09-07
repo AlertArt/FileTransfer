@@ -201,6 +201,7 @@ public class TransferItemViewModel_StateFlags_Tests
         public Task PauseAsync(string fileId) => Task.CompletedTask;
         public Task<PrepareResponse> RegisterReceiveTaskAsync(PrepareRequest prepare, DeviceNode peer) => throw new System.NotSupportedException();
         public Task ResumeAsync(string fileId) => Task.CompletedTask;
+        public Task RetryAsync(string fileId) => Task.CompletedTask;
         public Task RemoveTaskAsync(string fileId) => Task.CompletedTask;
         public Task StartSendAsync(string fileId, CancellationToken ct = default) => throw new System.NotSupportedException();
         public Task<bool> WriteChunkAsync(string fileId, int chunkIndex, int totalChunks, ReadOnlyMemory<byte> data) => throw new System.NotSupportedException();

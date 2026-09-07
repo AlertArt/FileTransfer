@@ -14,6 +14,7 @@
   "DragDropFlow": "Przeciągnij pliki → Wybierz urządzenie → Rozpocznij transfer",
   "Pause": "Wstrzymaj",
   "Resume": "Wznów",
+  "Retry": "Ponów",
   "Cancel": "Anuluj",
   "DeleteTask": "Usuń zadanie",
   "State.Created": "Utworzono",

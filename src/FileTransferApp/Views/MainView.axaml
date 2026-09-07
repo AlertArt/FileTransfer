@@ -369,6 +369,10 @@
                                                             Command="{Binding ResumeCommand}"
                                                             IsVisible="{Binding IsPaused}"
                                                             ToolTip.Tip="{svc:Localize Key=Resume}" />
+                                                    <Button Classes="Icon" Content="↻"
+                                                            Command="{Binding RetryCommand}"
+                                                            IsVisible="{Binding CanRetry}"
+                                                            ToolTip.Tip="{svc:Localize Key=Retry}" />
                                                     <Button Classes="Icon Danger" Content="✕"
                                                             Command="{Binding CancelCommand}"
                                                             IsVisible="{Binding CanCancel}"
