@@ -398,12 +398,14 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     public async Task RemoveTaskAsync(string fileId)
     {
         if (!_tasks.TryGetValue(fileId, out var task)) return;
-        // 非终态先取消（保证资源被清理）
+        // 非终态先取消（保证资源被清理；CancelAsync 会同步对端）
         if (!TransferStateMachine.IsTerminal(task.State))
             await CancelAsync(fileId).ConfigureAwait(false);
         CloseReceiveStream(fileId);
         _speeds.TryRemove(fileId, out _);
         _tasks.TryRemove(fileId, out _);
+        // 通知对端删除关联任务（对端任务若仍存在会一并取消并清理，卡片同步移除）
+        NotifyPeerControlAsync(task, TransferAction.REMOVE);
         // 通知 UI 从列表移除
         _messenger.Send(new TransferTaskRemovedMessage(fileId));
     }
@@ -525,6 +527,10 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                 break;
             case TransferAction.CANCEL:
                 _ = CancelAsync(fileId);
+                break;
+            case TransferAction.REMOVE:
+                // 对端删除任务 → 本端连取消带清理一并移除（RemoveTaskAsync 内部对非终态先取消）
+                _ = RemoveTaskAsync(fileId);
                 break;
         }
         return Task.CompletedTask;

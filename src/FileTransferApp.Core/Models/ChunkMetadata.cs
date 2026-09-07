@@ -14,7 +14,7 @@ public sealed class ChunkResponse
 public sealed class ControlRequest
 {
     public string FileId { get; set; } = string.Empty;
-    public string Action { get; set; } = string.Empty; // PAUSE | RESUME | CANCEL
+    public string Action { get; set; } = string.Empty; // PAUSE | RESUME | CANCEL | REMOVE
 }
 
 /// <summary>/control 接口响应</summary>

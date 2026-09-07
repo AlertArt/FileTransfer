@@ -42,5 +42,6 @@ public enum TransferAction
 {
     PAUSE,
     RESUME,
-    CANCEL
+    CANCEL,
+    REMOVE
 }
