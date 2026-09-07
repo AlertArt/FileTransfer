@@ -32,6 +32,8 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     /// <summary>逐任务进度推送节流：上次推送的时间戳 (Environment.TickCount64, ms)</summary>
     private readonly ConcurrentDictionary<string, long> _lastProgressTickMs = new();
+    /// <summary>逐任务发送续传重入锁：本地点击"恢复"与对端控制 RESUME 可能并发触发同一条续传，需去重</summary>
+    private readonly ConcurrentDictionary<string, byte> _resuming = new();
     /// <summary>大文件（数百 MB）按 64KB 切片会有上万条进度消息，
     /// 全量 Post 到 UI 线程会造成明显卡顿，限制到 ~10Hz/任务。</summary>
     private const int ProgressPublishIntervalMs = 100;
@@ -306,44 +308,72 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         if (!_tasks.TryGetValue(fileId, out var task)) return;
         if (task.State != TransferState.Paused) return;
 
-        task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
-        SetState(task, TransferState.Paused, TransferState.Transferring);
-
-        // 通知对端恢复为 Transferring（若对端此前也因暂停/断线处于 Paused）。
-        // 必须在重新握手/发片前发起，尽量消除"对端仍在 Paused → 首个切片被 409 拒绝"的竞态；
-        // 即使漏达，接收端 RegisterReceiveTaskAsync 的续传分支也会把状态拉回 Transferring。
-        NotifyPeerControlAsync(task, TransferAction.RESUME);
-
-        // 恢复时重新握手，获取对端最新 Bitmap（可能已部分到达）
-        var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
-        var prepareReq = new PrepareRequest
+        if (task.Direction == TransferDirection.Receive)
         {
-            FileId = task.FileId,
-            FileName = task.FileName,
-            FileSize = task.TotalBytes,
-            ChunkSize = task.ChunkSize,
-            Sha256 = task.Sha256,
-            ThumbnailBase64 = task.ThumbnailBase64,
-            ThumbnailMimeType = task.ThumbnailMimeType,
-        };
+            // 接收方向是被动方，无法自行续推：本地"恢复" = 同步状态并通知发送端重启推送。
+            // 发送端收到控制 RESUME 会进入 ResumeSendAsync（重新握手 + 推送缺失切片）。
+            SetState(task, TransferState.Paused, TransferState.Transferring);
+            NotifyPeerControlAsync(task, TransferAction.RESUME);
+            return;
+        }
+
+        await ResumeSendAsync(task).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 发送任务的续传核心：重新握手获取对端最新 Bitmap，再推送缺失切片。
+    /// 供两个入口复用：本端点击"恢复"(ResumeAsync)、对端发起恢复(ApplyControlAsync RESUME)。
+    /// 重入保护：同一任务同一时刻只允许一条续传链路，避免双循环重复推送。
+    /// </summary>
+    private async Task ResumeSendAsync(TransferTaskInfo task)
+    {
+        if (task.State != TransferState.Paused) return;
+        if (!_resuming.TryAdd(task.FileId, 0)) return;
         try
         {
-            var resp = await _http.PostAsJsonAsync(baseUri + ProtocolConstants.PathPrepare, prepareReq, default)
-                .ConfigureAwait(false);
-            var prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
-            if (prep is null || !prep.Accepted) { TryTransition(task, TransferState.Cancelled); return; }
-            await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), task.PauseCts.Token)
-                .ConfigureAwait(false);
-            if (task.State == TransferState.Transferring)
+            task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
+            SetState(task, TransferState.Paused, TransferState.Transferring);
+
+            // 通知对端恢复为 Transferring（若对端此前也处于 Paused）。
+            // 必须在重新握手/发片前发起，尽量消除"对端仍在 Paused → 首个切片被 409 拒绝"的竞态；
+            // 即使漏达，接收端 RegisterReceiveTaskAsync 的续传分支也会把状态拉回 Transferring。
+            NotifyPeerControlAsync(task, TransferAction.RESUME);
+
+            // 恢复时重新握手，获取对端最新 Bitmap（可能已部分到达）
+            var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
+            var prepareReq = new PrepareRequest
             {
-                task.BytesTransferred = task.TotalBytes;
-                SetState(task, TransferState.Transferring, TransferState.Completed);
+                FileId = task.FileId,
+                FileName = task.FileName,
+                FileSize = task.TotalBytes,
+                ChunkSize = task.ChunkSize,
+                Sha256 = task.Sha256,
+                ThumbnailBase64 = task.ThumbnailBase64,
+                ThumbnailMimeType = task.ThumbnailMimeType,
+            };
+            try
+            {
+                var resp = await _http.PostAsJsonAsync(baseUri + ProtocolConstants.PathPrepare, prepareReq, default)
+                    .ConfigureAwait(false);
+                var prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
+                if (prep is null || !prep.Accepted) { TryTransition(task, TransferState.Cancelled); return; }
+                await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), task.PauseCts.Token)
+                    .ConfigureAwait(false);
+                if (task.State == TransferState.Transferring)
+                {
+                    task.BytesTransferred = task.TotalBytes;
+                    SetState(task, TransferState.Transferring, TransferState.Completed);
+                }
+            }
+            catch (Exception ex)
+            {
+                SetError(task, $"恢复失败: {ex.Message}", "Err.ResumeFailed", ex.Message);
+                TryTransition(task, TransferState.Disconnected);
             }
         }
-        catch (Exception ex)
+        finally
         {
-            SetError(task, $"恢复失败: {ex.Message}", "Err.ResumeFailed", ex.Message);
-            TryTransition(task, TransferState.Disconnected);
+            _resuming.TryRemove(task.FileId, out _);
         }
     }
 
@@ -485,7 +515,12 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                     SetState(task, TransferState.Transferring, TransferState.Paused);
                 break;
             case TransferAction.RESUME:
-                if (task.State == TransferState.Paused)
+                // 发送方向：对端恢复 = 重启本端续传（重新握手 + 推送缺失切片）。
+                // 否则只翻状态不发片，发送端会停在 Transferring 空等，对端也永远等不到剩余切片。
+                // 接收方向：仅同步状态（对端既是发送方，会自行重启推送）。
+                if (task.Direction == TransferDirection.Send)
+                    _ = ResumeSendAsync(task);
+                else if (task.State == TransferState.Paused)
                     SetState(task, TransferState.Paused, TransferState.Transferring);
                 break;
             case TransferAction.CANCEL:
