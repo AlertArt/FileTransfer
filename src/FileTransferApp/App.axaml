@@ -178,9 +178,9 @@
             <Setter Property="BorderBrush" Value="{DynamicResource Brush.Brand}" />
         </Style>
 
-        <!-- ProgressBar 渐变进度条 -->
+        <!-- ProgressBar 渐变进度条：加高到 16px，为叠加百分比/速度信息留出空间 -->
         <Style Selector="ProgressBar">
-            <Setter Property="MinHeight" Value="8" />
+            <Setter Property="MinHeight" Value="16" />
             <Setter Property="CornerRadius" Value="{DynamicResource Radius.Pill}" />
             <Setter Property="Background" Value="{DynamicResource Brush.SurfaceMuted}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.ProgressGradient}" />

@@ -35,6 +35,8 @@ public partial class MainViewModel : ObservableObject,
     public ObservableCollection<TransferItemViewModel> Transfers { get; } = new();
 
     [ObservableProperty] public partial string SelfInfo { get; set; } = string.Empty;
+    /// <summary>紧凑模式自信息：仅显示本机 LAN IP（UDP 被 AP 隔离时，手机用户最需要把本机 IP 告知对端）</summary>
+    [ObservableProperty] public partial string IpText { get; set; } = string.Empty;
     /// <summary>
     /// 响应式布局开关：窄屏(Android 竖屏/小窗口 < 600px)时为 true，
     /// 此时设备面板与传输面板从左右结构切换为上下结构，按钮文字/缩略图也紧凑展示。
@@ -75,6 +77,7 @@ public partial class MainViewModel : ObservableObject,
         _selfName = self.DeviceName;
         _selfType = self.DeviceType.ToString();
         _selfPort = self.Port;
+        IpText = lanIps.Count > 0 ? string.Join(", ", lanIps) : _selfName;
         RefreshSelfInfo();
         // 构造完毕时设备列表手动选中逻辑：订阅设备列表变化，当有新设备出现时自动选中
         Devices.Devices.CollectionChanged += (_, e) =>
