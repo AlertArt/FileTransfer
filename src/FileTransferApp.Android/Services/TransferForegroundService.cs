@@ -4,6 +4,7 @@ using Android.Content.PM;
 using Android.OS;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
+using FileTransferApp.Services;
 
 namespace FileTransferApp.Android.Services;
 
@@ -39,7 +40,7 @@ public sealed class TransferForegroundService : Service
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
     {
         var title = intent?.GetStringExtra(ExtraTitle) ?? s_currentTitle ?? "FileTransferApp";
-        var content = intent?.GetStringExtra(ExtraContent) ?? s_currentContent ?? "正在保持传输服务运行";
+        var content = intent?.GetStringExtra(ExtraContent) ?? s_currentContent ?? LocalizationService.Instance.GetString("KeepAliveIdle");
 
         s_currentTitle = title;
         s_currentContent = content;
@@ -169,10 +170,10 @@ public sealed class TransferForegroundService : Service
 
         var channel = new NotificationChannel(
             ChannelId,
-            "文件传输服务",
+            LocalizationService.Instance.GetString("Notification.ChannelName"),
             NotificationImportance.Low) // 低重要级：无声响，仅在抽屉中显示
         {
-            Description = "保持文件传输服务在后台运行"
+            Description = LocalizationService.Instance.GetString("Notification.ChannelDescription")
         };
         // .NET for Android 不同 binding 版本提供 ShowBadge 属性或 SetShowBadge 方法：
         // 这里使用反射优先调用 SetShowBadge，失败时不抛（属性仅外观增强）
@@ -278,7 +279,7 @@ public sealed class TransferForegroundService : Service
             var builder = new NotificationCompat.Builder(ctx, ChannelId)
                 .SetSmallIcon(GetFallbackIconId())
                 .SetContentTitle(title ?? "FileTransferApp")
-                .SetContentText(content ?? "传输进行中")
+                .SetContentText(content ?? LocalizationService.Instance.GetString("KeepAliveIdle"))
                 .SetOngoing(true)
                 .SetPriority(NotificationCompat.PriorityLow);
             return builder.Build();

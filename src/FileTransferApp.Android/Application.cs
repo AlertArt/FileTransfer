@@ -58,7 +58,9 @@ namespace FileTransferApp.Android
             try
             {
                 var keepAlive = ServiceLocator.Services.GetService<IPlatformKeepAliveService>();
-                keepAlive?.StartKeepAlive("FileTransferApp", "传输服务运行中，可接收文件");
+                keepAlive?.StartKeepAlive(
+                    LocalizationService.Instance.GetString("KeepAliveTitle"),
+                    LocalizationService.Instance.GetString("KeepAliveIdle"));
                 global::Android.Util.Log.Info("FTA.BOOT", "Foreground keep-alive service started");
             }
             catch (System.Exception ex)

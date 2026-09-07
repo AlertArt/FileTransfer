@@ -2,6 +2,7 @@ using Android.Content;
 using Android.OS;
 using FileTransferApp.Core.Services.Impl;
 using FileTransferApp.Core.Services.Interfaces;
+using FileTransferApp.Services;
 
 namespace FileTransferApp.Android.Services;
 
@@ -12,8 +13,9 @@ namespace FileTransferApp.Android.Services;
 /// </summary>
 public sealed class AndroidKeepAliveService : IPlatformKeepAliveService
 {
-    private const string DefaultTitle = "FileTransferApp";
-    private const string DefaultContent = "正在保持传输服务运行";
+    // 兜底文案：调用方传空时才使用，按当前语言动态解析
+    private static string DefaultTitle => LocalizationService.Instance.GetString("KeepAliveTitle");
+    private static string DefaultContent => LocalizationService.Instance.GetString("KeepAliveIdle");
 
     private readonly Context _context;
     // 平台无关的状态机：跟踪 Running / 文案回退 / 提示去重

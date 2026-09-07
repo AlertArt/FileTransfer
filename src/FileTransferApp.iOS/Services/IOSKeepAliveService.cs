@@ -2,6 +2,7 @@ using CoreFoundation;
 using Foundation;
 using FileTransferApp.Core.Services.Impl;
 using FileTransferApp.Core.Services.Interfaces;
+using FileTransferApp.Services;
 using UIKit;
 
 namespace FileTransferApp.iOS.Services;
@@ -16,7 +17,8 @@ namespace FileTransferApp.iOS.Services;
 public sealed class IOSKeepAliveService : IPlatformKeepAliveService
 {
     private const string DefaultTitle = "FileTransferApp";
-    private const string DefaultContent = "请保持应用在前台以确保文件传输不被中断";
+    // 兜底前台提示文案：按照当前语言动态解析
+    private static string DefaultContent => LocalizationService.Instance.GetString("KeepAliveForeground");
 
     private nint? _backgroundTaskId;
     private bool _idleTimerOriginallyDisabled;
@@ -87,7 +89,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
             while (vc.PresentedViewController is not null) vc = vc.PresentedViewController;
 
             var alert = UIAlertController.Create(title, content, UIAlertControllerStyle.Alert);
-            alert.AddAction(UIAlertAction.Create("我知道了", UIAlertActionStyle.Default, null));
+            alert.AddAction(UIAlertAction.Create(LocalizationService.Instance.GetString("KeepAliveOk"), UIAlertActionStyle.Default, null));
             vc.PresentViewController(alert, true, null);
         });
     }
