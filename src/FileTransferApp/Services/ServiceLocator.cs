@@ -49,6 +49,6 @@ internal sealed class EmptyServiceProvider : IServiceProvider
     // 让 GetService 也抛异常，避免上游 GetRequiredService 返回 null 后空引用
     public object? GetService(System.Type serviceType)
         => throw new InvalidOperationException(
-            $"服务 {serviceType.FullName} 未注册。请在平台入口（Program/AppDelegate/MainActivity）" +
-            "中调用 ConfigureServices 完成 DI 容器构建后再解析服务。");
+            $"Service {serviceType.FullName} is not registered. Call ConfigureServices in the " +
+            "platform entry point (Program/AppDelegate/MainActivity) before resolving services.");
 }

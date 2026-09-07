@@ -29,6 +29,9 @@ public sealed class LocalizationService : INotifyPropertyChanged
         ("pl-PL", "Polski"),
     };
 
+    private const string SettingsDirName = "FileTransferApp";
+    private const string LanguageFileName = "language.txt";
+
     private readonly Dictionary<string, string> _strings = new();
     private string _currentLanguage = DefaultLanguage;
 
@@ -79,10 +82,50 @@ public sealed class LocalizationService : INotifyPropertyChanged
         if (!SupportedLanguages.Any(l => l.Code == code)) code = DefaultLanguage;
         LoadLanguage(code);
         CurrentLanguage = code;
+        PersistLanguage(code);
         // 通知所有绑定刷新：索引器 this[key] 对应 PropertyChanged 名为 "Item[]"
         OnPropertyChanged(string.Empty);
         OnPropertyChanged("Item[]");
     }
+
+    /// <summary>
+    /// 应用启动时调用：恢复用户上次保存的语言。
+    /// 无保存记录或语言已从支持列表移除时保持默认语言（zh-CN）。
+    /// 显式调用而非在构造函数中自动恢复：保证单元测试环境恒为默认语言。
+    /// </summary>
+    public void InitializePersistedLanguage()
+    {
+        try
+        {
+            var path = GetLanguageFilePath();
+            if (!File.Exists(path)) return;
+            var code = File.ReadAllText(path).Trim();
+            if (string.IsNullOrEmpty(code) || !SupportedLanguages.Any(l => l.Code == code)) return;
+            LoadLanguage(code);
+            CurrentLanguage = code;
+        }
+        catch
+        {
+            // 恢复失败时保持默认语言（zh-CN），不影响启动
+        }
+    }
+
+    private static void PersistLanguage(string code)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), SettingsDirName);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, LanguageFileName), code);
+        }
+        catch
+        {
+            // 持久化写入失败（如沙箱目录只读）不影响运行时
+        }
+    }
+
+    private static string GetLanguageFilePath()
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), SettingsDirName, LanguageFileName);
 
     private void LoadLanguage(string code)
     {

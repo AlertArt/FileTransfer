@@ -409,6 +409,8 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Classes="Muted" VerticalAlignment="Center"
+                               Text="{svc:Localize Key=Language}" />
+                    <TextBlock Classes="Muted" VerticalAlignment="Center"
                                Text="{svc:Localize Key=DragDropFlow}"
                                IsVisible="{Binding !IsCompact}" />
                     <!-- 语言切换下拉框 -->

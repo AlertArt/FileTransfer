@@ -22,6 +22,8 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // 恢复用户上次选择的语言（无记录时保持默认；失败静默回退）
+        LocalizationService.Instance.InitializePersistedLanguage();
         BootDiagnostics.Log("App.OnFrameworkInit ENTER. ServiceLocator=" + ServiceLocator.Services.GetType().FullName);
         // 关键修复：Android 上 ConfigureServices 已在 base.OnCreate 前执行，DI 此时已就绪。
         // 必须在 base.OnFrameworkInitializationCompleted() 之前同步绑定 MainView，
