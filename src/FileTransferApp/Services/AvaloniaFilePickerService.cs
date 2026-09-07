@@ -62,7 +62,7 @@ public sealed class AvaloniaFilePickerService : IFilePickerService
 
         var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "选择要发送的文件",
+            Title = LocalizationService.Instance.GetString("FilePicker.Title"),
             AllowMultiple = true
         });
 

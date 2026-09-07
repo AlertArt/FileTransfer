@@ -33,5 +33,13 @@
   "SelfInfo": "{0} ({1}) · 传输端口 {2}{3}",
   "KeepAliveTitle": "FileTransferApp",
   "KeepAliveContent": "正在传输文件，保持服务运行",
-  "Language": "语言"
+  "Language": "语言",
+  "FilePicker.Title": "选择要发送的文件",
+  "Approval.Title": "接收文件请求",
+  "Approval.From": "来自：{0}",
+  "Approval.FileName": "文件名：{0}",
+  "Approval.Size": "大小：{0}",
+  "Approval.Sha256": "SHA256：{0}",
+  "Approval.Accept": "接收",
+  "Approval.Reject": "拒绝"
 }

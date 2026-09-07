@@ -33,5 +33,13 @@
   "SelfInfo": "{0} ({1}) · Port {2}{3}",
   "KeepAliveTitle": "FileTransferApp",
   "KeepAliveContent": "Transferowanie plików, utrzymywanie usługi",
-  "Language": "Język"
+  "Language": "Język",
+  "FilePicker.Title": "Wybierz pliki do wysłania",
+  "Approval.Title": "Prośba o odebranie pliku",
+  "Approval.From": "Od: {0}",
+  "Approval.FileName": "Plik: {0}",
+  "Approval.Size": "Rozmiar: {0}",
+  "Approval.Sha256": "SHA256: {0}",
+  "Approval.Accept": "Zaakceptuj",
+  "Approval.Reject": "Odrzuć"
 }

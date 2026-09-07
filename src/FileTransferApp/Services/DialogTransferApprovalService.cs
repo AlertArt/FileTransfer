@@ -57,7 +57,7 @@ public sealed class DialogTransferApprovalService : ITransferApprovalService
 
         var dlg = new Window
         {
-            Title = "接收文件请求",
+            Title = LocalizationService.Instance.GetString("Approval.Title"),
             Width = 380,
             Height = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -74,17 +74,17 @@ public sealed class DialogTransferApprovalService : ITransferApprovalService
 
         panel.Children.Add(new TextBlock
         {
-            Text = $"来自：{peerName}",
+            Text = LocalizationService.Instance.Format("Approval.From", peerName),
             FontWeight = FontWeight.SemiBold,
             FontSize = 14
         });
-        panel.Children.Add(new TextBlock { Text = $"文件名：{metadata.FileName}" });
-        panel.Children.Add(new TextBlock { Text = $"大小：{Core.Services.Impl.SpeedFormatter.FormatSize(metadata.FileSize)}" });
+        panel.Children.Add(new TextBlock { Text = LocalizationService.Instance.Format("Approval.FileName", metadata.FileName) });
+        panel.Children.Add(new TextBlock { Text = LocalizationService.Instance.Format("Approval.Size", Core.Services.Impl.SpeedFormatter.FormatSize(metadata.FileSize)) });
         if (!string.IsNullOrEmpty(metadata.Sha256))
         {
             panel.Children.Add(new TextBlock
             {
-                Text = $"SHA256：{metadata.Sha256[..Math.Min(16, metadata.Sha256.Length)]}…",
+                Text = LocalizationService.Instance.Format("Approval.Sha256", metadata.Sha256[..Math.Min(16, metadata.Sha256.Length)] + "…"),
                 FontFamily = FontFamily.Parse("Cascadia Mono,Consolas,Courier New"),
                 FontSize = 11,
                 Opacity = 0.6
@@ -120,13 +120,13 @@ public sealed class DialogTransferApprovalService : ITransferApprovalService
         };
         var acceptBtn = new Button
         {
-            Content = "接收",
+            Content = LocalizationService.Instance.GetString("Approval.Accept"),
             Padding = new Thickness(20, 6),
             FontWeight = FontWeight.SemiBold
         };
         var rejectBtn = new Button
         {
-            Content = "拒绝",
+            Content = LocalizationService.Instance.GetString("Approval.Reject"),
             Padding = new Thickness(20, 6)
         };
         btnPanel.Children.Add(rejectBtn);
