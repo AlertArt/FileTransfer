@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -247,6 +248,14 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                 await PostChunkAsync(task, baseUri, idx, hash, buf, read, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { break; }
+            catch (HttpRequestException hre) when (hre.StatusCode == HttpStatusCode.Conflict)
+            {
+                // 对端任务处于 Paused/Cancelled（/chunk 返回 409 "已暂停或已取消，拒绝写入"）。
+                // 此前本端会直接判为 Disconnected → UI 没有"继续"入口，传输彻底卡死。
+                // 现在将对端暂停信号同步为本端 Paused，用户点"继续"即可无缝续传。
+                TryTransition(task, TransferState.Paused);
+                return;
+            }
             catch (Exception ex)
             {
                 SetError(task, $"切片 {idx} 发送失败: {ex.Message}", "Err.ChunkSendFailed", idx, ex.Message);
@@ -286,6 +295,8 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         {
             SetState(task, TransferState.Transferring, TransferState.Paused);
             try { task.PauseCts?.Cancel(); } catch { /* ignore */ }
+            // 告知对端暂停：否则对端仍处于 Transferring，继续发片，本端/对端状态失同步
+            NotifyPeerControlAsync(task, TransferAction.PAUSE);
         }
         return Task.CompletedTask;
     }
@@ -297,6 +308,11 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
         task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         SetState(task, TransferState.Paused, TransferState.Transferring);
+
+        // 通知对端恢复为 Transferring（若对端此前也因暂停/断线处于 Paused）。
+        // 必须在重新握手/发片前发起，尽量消除"对端仍在 Paused → 首个切片被 409 拒绝"的竞态；
+        // 即使漏达，接收端 RegisterReceiveTaskAsync 的续传分支也会把状态拉回 Transferring。
+        NotifyPeerControlAsync(task, TransferAction.RESUME);
 
         // 恢复时重新握手，获取对端最新 Bitmap（可能已部分到达）
         var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
@@ -338,6 +354,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
         try { task.PauseCts?.Cancel(); } catch { /* ignore */ }
         TryTransition(task, TransferState.Cancelled);
+        NotifyPeerControlAsync(task, TransferAction.CANCEL);
 
         // 接收端：删除 .tmp 临时文件
         if (task.Direction == TransferDirection.Receive && task.LocalPath is not null)
@@ -368,6 +385,12 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         // 续传：任务已存在 → 回传 Bitmap
         if (_tasks.TryGetValue(prepare.FileId, out var existing) && _receiveStreams.ContainsKey(prepare.FileId))
         {
+            // 恢复握手：发送端再次 /prepare 即"恢复发送"信号。
+            // 若本端任务处于 暂停(Paused) 或 断线(Disconnected)，必须先把状态拉回 Transferring，
+            // 否则恢复后的首个切片会被 WriteChunkAsync 的 Paused/Cancelled 检查按 409 拒绝，
+            // 发送端会判定失败并进入无法继续的 Disconnected（"暂停之后无法继续"的根源之一）。
+            if (existing.State is TransferState.Paused or TransferState.Disconnected)
+                SetState(existing, existing.State, TransferState.Transferring);
             return new PrepareResponse { Accepted = true, ReceivedChunks = existing.ReceivedChunks.ToArray() };
         }
 
@@ -643,5 +666,35 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         {
             try { s.Dispose(); } catch { /* ignore */ }
         }
+    }
+
+    /// <summary>
+    /// 向对端发送控制命令（/control）：暂停/恢复/取消都需同步给对端，否则两端状态失同步。
+    /// /control 端点在接收端早已实现（ApplyControlAsync），却从未被发送侧调用。
+    /// fire-and-forget + 全程吞异常：对端离线/超时静默，绝不影响本端状态机。
+    /// </summary>
+    private void NotifyPeerControlAsync(TransferTaskInfo task, TransferAction action)
+    {
+        if (task.Peer?.IpAddress is null) return;
+        try
+        {
+            // 接收方向：Peer 来自 BuildPeer（TCP 源端口，临时端口），但目标设备的传输服务固定监听
+            // ProtocolConstants.TransferPort；发送方向：Peer 来自设备发现（Port=53318）。
+            var port = task.Direction == TransferDirection.Receive
+                ? ProtocolConstants.TransferPort
+                : task.Peer.Port;
+            var target = $"http://{task.Peer.IpAddress}:{port}{ProtocolConstants.PathControl}";
+            var cmd = new ControlRequest { FileId = task.FileId, Action = action.ToString() };
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var resp = await _http.PostAsJsonAsync(target, cmd).ConfigureAwait(false);
+                    resp.EnsureSuccessStatusCode();
+                }
+                catch { /* best-effort：对端可能已离线 */ }
+            });
+        }
+        catch { /* ignore */ }
     }
 }
