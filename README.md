@@ -1,6 +1,6 @@
 # FileTransferApp — 跨平台局域网文件快传
 
-基于 **Avalonia UI 11 + .NET 10** 的跨平台文件传输应用，支持 **Windows ↔ Android** 局域网高速文件互传。
+基于 **Avalonia UI 11 + .NET 10** 的跨平台文件传输应用，支持 **Windows ↔ Android ↔ iOS** 局域网高速文件互传。
 
 > 设计目标：零配置、即开即用、现代化 UI、大文件稳定传输。
 
@@ -12,9 +12,10 @@
 |------|------|
 | 📡 自动设备发现 | UDP 多播 + 广播双路心跳，自动发现同一局域网内的设备 |
 | 🔗 手动直连 | UDP 被 AP 隔离 / 随机 MAC 时，可手动输入目标 IP 直连 |
-| 📤 文件发送 | 支持任意类型 / 任意大小文件，2 MB 切片断点续传 |
-| 📥 文件接收 | 接收端自动审批，SHA-256 完整性校验 |
+| 📤 文件发送 | 支持任意类型 / 任意大小文件，2 MB 切片断点续传，失败可一键重试 |
+| 📥 文件接收 | 接收端自动审批，SHA-256 完整性校验，暂停/恢复跨设备状态同步 |
 | 🖼️ 缩略图预览 | 图片自动生成缩略图，传输卡片可视化 |
+| 🖱️ 双击打开 | 接收完成的卡片双击即可用系统默认程序打开文件 (Win / Android / iOS) |
 | 📱 响应式 UI | 现代 App 风格设计令牌，手机竖屏 / 横屏 / 桌面自适应 |
 | 🔐 签名方案 | V1 (JAR) + V2 (APK Sig v2) 双签名，兼容 Android 6 ~ 15 |
 | 🛡️ 前台服务保活 | Android 8+ 前台服务 + 通知，后台持续监听 |
@@ -55,22 +56,37 @@ FileTransfer/
 │   │   ├── ViewModels/                 # MainViewModel / DeviceListViewModel / TransferItemViewModel
 │   │   ├── Views/                      # MainView.axaml (响应式布局)
 │   │   ├── Services/                   # AvaloniaFilePickerService / DialogTransferApprovalService
+│   │   │                               # IFileOpenService (平台文件打开抽象) / ServiceConfiguration
 │   │   └── App.axaml.cs                # 启动入口 + 后台服务初始化
 │   │
 │   ├── FileTransferApp.Desktop/       # Windows 桌面头项目
 │   │   ├── Services/
 │   │   │   ├── DesktopStorageService.cs        # System.IO 直接读写
+│   │   │   ├── DesktopFileOpenService.cs       # 系统默认程序打开文件 (Process.Start)
 │   │   │   └── WindowsFirewallRegistrar.cs     # 防火墙端口放行注册
 │   │   └── Program.cs
 │   │
-│   └── FileTransferApp.Android/       # Android 头项目
+│   ├── FileTransferApp.Android/       # Android 头项目
+│   │   ├── Services/
+│   │   │   ├── AndroidStorageService.cs        # 存储权限降级策略
+│   │   │   ├── AndroidFileOpenService.cs       # FileProvider + Intent 打开文件
+│   │   │   ├── TransferForegroundService.cs    # 前台保活服务
+│   │   │   └── AndroidKeepAliveService.cs
+│   │   ├── Resources/xml/file_paths.xml        # FileProvider 路径配置
+│   │   ├── Application.cs                      # DI 初始化 + 前台服务启动
+│   │   ├── MainActivity.cs                     # 权限申请 (POST_NOTIFICATIONS 等)
+│   │   └── Properties/AndroidManifest.xml
+│   │
+│   └── FileTransferApp.iOS/           # iOS 头项目 (App Store 需自签名证书)
 │       ├── Services/
-│       │   ├── AndroidStorageService.cs        # 存储权限降级策略
-│       │   ├── TransferForegroundService.cs    # 前台保活服务
-│       │   └── AndroidKeepAliveService.cs
-│       ├── Application.cs                      # DI 初始化 + 前台服务启动
-│       ├── MainActivity.cs                     # 权限申请 (POST_NOTIFICATIONS 等)
-│       └── Properties/AndroidManifest.xml
+│       │   ├── IOSStorageService.cs            # 沙箱 Documents 存储
+│       │   ├── IOSFileOpenService.cs           # UIApplication.OpenUrl 打开文件
+│       │   └── IOSKeepAliveService.cs          # 后台任务保活
+│       └── AppDelegate.cs                      # DI 初始化 + 应用生命周期
+│
+├── tests/
+│   ├── FileTransferApp.Core.Tests/    # 核心引擎/服务器/状态机单元测试 (289)
+│   └── FileTransferApp.Tests/         # ViewModel 状态与命令测试 (19)
 │
 ├── assets/appicon/                     # 应用图标源文件
 ├── build/                              # 发布产物 (已 gitignore)
@@ -96,7 +112,7 @@ FileTransfer/
 |------|------|------|
 | POST | `/api/v1/transfer/prepare` | 握手：发送文件元数据，对方返回是否接受 + 已接收切片（断点续传） |
 | POST | `/api/v1/transfer/chunk` | 推送单个切片 (2 MB)，Header 带 `X-File-Id` / `X-Chunk-Index` / `X-Chunk-Hash` |
-| POST | `/api/v1/transfer/control` | 控制：暂停 / 恢复 / 取消 |
+| POST | `/api/v1/transfer/control` | 控制：暂停 / 恢复 / 取消 / 删除（跨设备同步） |
 
 ### 状态机
 
@@ -118,7 +134,8 @@ Created → Preparing → WaitingApproval → Transferring → Completed
 
 - .NET 10 SDK
 - Android SDK (API 36 build-tools) + JDK 21 (仅 Android 构建)
-- Windows 10+ / Android 6.0+ (API 23+)
+- macOS + Xcode (仅 iOS 构建)
+- Windows 10+ / Android 6.0+ (API 23+) / iOS 13+
 
 ### 构建 Windows
 
@@ -155,15 +172,15 @@ dotnet publish src/FileTransferApp.Android/FileTransferApp.Android.csproj \
 
 ## 📱 使用指南
 
-### 两台设备互传（Windows → Android）
+### 两台设备互传（Windows → 移动端）
 
-1. **Android 端**：安装 APK 并打开，查看顶部副标题显示的 `LAN IP: x.x.x.x`
+1. **移动端**：安装 App 并打开，查看顶部副标题显示的 `LAN IP: x.x.x.x`
 2. **Windows 端**：左侧「附近设备」面板直连区：
-   - IP 填入 Android 的 LAN IP
+   - IP 填入移动端的 LAN IP
    - 端口保持 `53318`（传输端口，不是发现端口 53317）
    - 点击「直连」→ 自动生成并选中目标设备
 3. 点击顶栏 **📁 选择文件并发送**，选择文件后自动开始传输
-4. Android 端自动接收，文件落在 `Download/` 目录（无权限时降级到应用私有目录）
+4. 移动端自动接收并落盘；接收完成的卡片**双击**即可用系统默认程序打开
 
 ### 自动发现（同网段且 UDP 可达时）
 

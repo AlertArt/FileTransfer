@@ -43,7 +43,7 @@ public class TransferItemViewModel_StateFlags_Tests
             State = initialState,
         };
         var messenger = WeakReferenceMessenger.Default;
-        var engine = new NSubstituteEngine();
+        var engine = new StubEngine();
         var vm = new TestableTransferItemViewModel(messenger, engine, task);
         return (vm, task);
     }
@@ -110,7 +110,7 @@ public class TransferItemViewModel_StateFlags_Tests
             BytesTransferred = 1024,
             State = TransferState.Transferring,
         };
-        var vm = new TestableTransferItemViewModel(WeakReferenceMessenger.Default, new NSubstituteEngine(), task);
+        var vm = new TestableTransferItemViewModel(WeakReferenceMessenger.Default, new StubEngine(), task);
 
         Assert.Equal("f123",       vm.FileId);
         Assert.Equal("hello.txt",  vm.FileName);
@@ -182,13 +182,13 @@ public class TransferItemViewModel_StateFlags_Tests
             TotalBytes = 0,
             State = TransferState.Created,
         };
-        var vm = new TestableTransferItemViewModel(WeakReferenceMessenger.Default, new NSubstituteEngine(), task);
+        var vm = new TestableTransferItemViewModel(WeakReferenceMessenger.Default, new StubEngine(), task);
         // ProgressPercentage 不崩溃、在 [0, 100]
         Assert.InRange(vm.ProgressPercentage, 0, 100);
     }
 
     // ---- helpers ----
-    private sealed class NSubstituteEngine : ITransferEngine
+    private sealed class StubEngine : ITransferEngine
     {
 #pragma warning disable CS0067 // mock 不主动触发状态事件，供接口签名占位
         public event EventHandler<Core.Messaging.TransferStatusChangedMessage>? StateChanged;

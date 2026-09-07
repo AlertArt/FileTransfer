@@ -28,8 +28,6 @@
   "State.Cancelled": "Anulowano",
   "Direction.Send": "Wyślij",
   "Direction.Receive": "Odbierz",
-  "Speed.Zero": "0 KB/s",
-  "Size.Zero": "0 B",
   "ManualConnectName": "Ręcznie {0}:{1}",
   "SelfInfo": "{0} ({1}) · Port {2}{3}",
   "KeepAliveTitle": "FileTransferApp",

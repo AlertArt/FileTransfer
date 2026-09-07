@@ -473,3 +473,6 @@ build/android/merge_and_sign.py
 
 # Test-generated binary artifacts
 *.bin
+
+# Design document exports
+*.pdf

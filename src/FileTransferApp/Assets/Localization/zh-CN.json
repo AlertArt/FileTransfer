@@ -28,8 +28,6 @@
   "State.Cancelled": "已取消",
   "Direction.Send": "发送",
   "Direction.Receive": "接收",
-  "Speed.Zero": "0 KB/s",
-  "Size.Zero": "0 B",
   "ManualConnectName": "手动直连 {0}:{1}",
   "SelfInfo": "{0} ({1}) · 传输端口 {2}{3}",
   "KeepAliveTitle": "FileTransferApp",
