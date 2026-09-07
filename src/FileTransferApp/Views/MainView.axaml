@@ -94,7 +94,7 @@
                                VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
-                    <TextBlock Text="快传 · Nearby Transfer"
+                    <TextBlock Text="{svc:Localize Key=AppTitle}"
                                Classes="Title"
                                FontSize="16"
                                Foreground="{DynamicResource Brush.TextOnBrand}" />
@@ -141,7 +141,7 @@
                         <!-- 卡片标题 + 在线数徽标 -->
                         <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left"
-                                       Text="附近设备"
+                                       Text="{svc:Localize Key=NearbyDevices}"
                                        Classes="Title"
                                        FontSize="16" />
                             <Border DockPanel.Dock="Right"
@@ -149,7 +149,7 @@
                                     CornerRadius="{DynamicResource Radius.Pill}"
                                     Padding="8,2"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Devices.Devices.Count, StringFormat='{}{0} 在线'}"
+                                <TextBlock Text="{svc:Localize Key=OnlineCount, Args={Binding Devices.Devices.Count}}"
                                            FontSize="11"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource Brush.TextOnBrand}" />
@@ -159,7 +159,7 @@
                         <!-- 主操作按钮（紧凑模式也能用） -->
                         <Button DockPanel.Dock="Bottom"
                                 Classes="Primary"
-                                Content="📁 选择文件并发送"
+                                Content="{svc:Localize Key=SelectFileAndSend}"
                                 Command="{Binding SendFileCommand}"
                                 IsEnabled="{Binding Devices.SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 Margin="0,10,0,0" />
