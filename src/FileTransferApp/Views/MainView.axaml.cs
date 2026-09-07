@@ -32,6 +32,7 @@ public partial class MainView : UserControl
         LayoutUpdated += MainView_LayoutUpdated;
 
         InitializeLanguageCombo();
+        InitializeThemeCombo();
     }
 
     private void InitializeLanguageCombo()
@@ -50,6 +51,43 @@ public partial class MainView : UserControl
         if (LanguageCombo is null || LanguageCombo.SelectedIndex < 0) return;
         var lang = LocalizationService.SupportedLanguages[LanguageCombo.SelectedIndex];
         LocalizationService.Instance.SetLanguage(lang.Code);
+    }
+
+    private void InitializeThemeCombo()
+    {
+        if (ThemeCombo is null) return;
+        // 监听语言切换：重新本地化主题选项文本
+        LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
+        RefreshThemeComboItems();
+        RefreshThemeSelection();
+    }
+
+    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        RefreshThemeComboItems();
+        RefreshThemeSelection();
+    }
+
+    private void RefreshThemeComboItems()
+    {
+        ThemeCombo.ItemsSource = ThemeService.SupportedThemes
+            .Select(t => LocalizationService.Instance[t.Key])
+            .ToList();
+    }
+
+    private void RefreshThemeSelection()
+    {
+        var current = ThemeService.Instance.Current;
+        var idx = Array.FindIndex(ThemeService.SupportedThemes, t => t.Value == current);
+        ThemeCombo.SelectedIndex = idx >= 0 ? idx : 0;
+    }
+
+    private void OnThemeChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (ThemeCombo is null || ThemeCombo.SelectedIndex < 0) return;
+        var option = ThemeService.SupportedThemes[ThemeCombo.SelectedIndex];
+        ThemeService.Instance.Apply(option.Value);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
