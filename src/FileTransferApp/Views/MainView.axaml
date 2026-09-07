@@ -56,7 +56,7 @@
         <!-- 横屏手机(short, 宽≥600 但高<500)：两栏布局，压缩顶栏/底栏纵向 padding -->
         <Style Selector="Grid.short > Border.TopBar">
             <Setter Property="Padding" Value="12,6,12,8" />
-            <Setter Property="CornerRadius" Value="0,0,12,12" />
+            <Setter Property="CornerRadius" Value="0,0,16,16" />
             <Setter Property="BoxShadow" Value="0 4 12 0 rgba(99,102,241,0.18)" />
         </Style>
         <Style Selector="Grid.short > Border.BottomBar">
@@ -306,6 +306,19 @@
                                                                 </Grid>
                                                             </ContentPresenter.Content>
                                                         </ContentPresenter>
+                                                        <!-- 双击打开暗示：仅已完成接收任务显示（右下角 ↗ 角标） -->
+                                                        <Border HorizontalAlignment="Right"
+                                                                VerticalAlignment="Bottom"
+                                                                Margin="4"
+                                                                Padding="5,1"
+                                                                Background="#CC0F172A"
+                                                                CornerRadius="{DynamicResource Radius.Sm}"
+                                                                IsVisible="{Binding CanOpenFile}">
+                                                            <TextBlock Text="↗"
+                                                                       FontSize="10"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="White" />
+                                                        </Border>
                                                     </Grid>
                                                 </Border>
 
