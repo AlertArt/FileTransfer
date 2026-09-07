@@ -68,6 +68,10 @@ public sealed class LocalizationService : INotifyPropertyChanged
         catch { return fmt; }
     }
 
+    /// <summary>指定 key 当前是否有可用的本地化文案（用于错误码等可尖退场景）。</summary>
+    public bool HasString(string key)
+        => !string.IsNullOrEmpty(key) && _strings.ContainsKey(key);
+
     /// <summary>切换语言并触发 UI 刷新。</summary>
     public void SetLanguage(string code)
     {

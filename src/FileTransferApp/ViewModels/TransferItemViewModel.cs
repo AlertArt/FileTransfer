@@ -86,6 +86,8 @@ public partial class TransferItemViewModel : ObservableObject,
         {
             StateText = StateToText(State);
             MetaText = BuildMetaText(Direction, TotalBytes);
+            // 错误文案是基于之前语言解析的，切换语言后按当前语言重新解析
+            SyncErrorMessageFromEngine();
         });
     }
 
@@ -139,11 +141,10 @@ public partial class TransferItemViewModel : ObservableObject,
         Dispatcher.UIThread.Post(() =>
         {
             ApplyCompleted(message.Success);
-            // CompletedMessage 显式带 ErrorMessage，优先用它
-            if (!string.IsNullOrEmpty(message.ErrorMessage))
+            // 引擎任务在时优先取本地化错误（含 ErrorCode）；任务已被移除时退回 CompletedMessage 快照
+            SyncErrorMessageFromEngine();
+            if (string.IsNullOrEmpty(ErrorMessage) && !string.IsNullOrEmpty(message.ErrorMessage))
                 SetError(message.ErrorMessage);
-            else
-                SyncErrorMessageFromEngine();
         });
     }
 
@@ -170,13 +171,22 @@ public partial class TransferItemViewModel : ObservableObject,
     /// <summary>
     /// 从底层 task.ErrorMessage 拉取最新错误信息；空值时不覆盖之前的错误。
     /// 只要不是 TransferState.Completed 且有错误信息，就把 ShowErrorHint=true。
+    /// 优先按 ErrorCode 本地化（跟随当前语言），资源缺失时回退原始 ErrorMessage。
     /// </summary>
     private void SyncErrorMessageFromEngine()
     {
         var t = _engine.GetTask(FileId);
         if (t is null) return;
-        if (!string.IsNullOrEmpty(t.ErrorMessage))
-            SetError(t.ErrorMessage);
+        var text = ResolveError(t);
+        if (!string.IsNullOrEmpty(text))
+            SetError(text);
+    }
+
+    private static string? ResolveError(TransferTaskInfo t)
+    {
+        if (!string.IsNullOrEmpty(t.ErrorCode) && LocalizationService.Instance.HasString(t.ErrorCode))
+            return LocalizationService.Instance.Format(t.ErrorCode, t.ErrorArgs ?? Array.Empty<object>());
+        return t.ErrorMessage;
     }
 
     private void SetError(string msg)

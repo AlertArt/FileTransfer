@@ -46,5 +46,14 @@
   "Approval.Size": "Rozmiar: {0}",
   "Approval.Sha256": "SHA256: {0}",
   "Approval.Accept": "Zaakceptuj",
-  "Approval.Reject": "Odrzuć"
+  "Approval.Reject": "Odrzuć",
+  "Err.PrepareFailure": "Przygotowanie nieudane: {0}",
+  "Err.HandshakeHttp": "Nieudane uzgadnianie HTTP {0} ({1})",
+  "Err.HandshakeRejected": "Uzgadnianie odrzucone ({0}): {1}",
+  "Err.ConnectFailed": "Połączenie nieudane ({0}): {1}",
+  "Err.PeerRejected": "Drugie urządzenie odrzuciło transfer (bez powodu)",
+  "Err.PeerRejectedReason": "Odrzucono przez drugą stronę: {0}",
+  "Err.ChunkSendFailed": "Wysyłanie fragmentu {0} nieudane: {1}",
+  "Err.ResumeFailed": "Wznawianie nieudane: {0}",
+  "Err.Sha256Mismatch": "Weryfikacja SHA256 nieudana"
 }

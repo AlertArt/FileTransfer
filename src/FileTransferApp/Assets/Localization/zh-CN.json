@@ -46,5 +46,14 @@
   "Approval.Size": "大小：{0}",
   "Approval.Sha256": "SHA256：{0}",
   "Approval.Accept": "接收",
-  "Approval.Reject": "拒绝"
+  "Approval.Reject": "拒绝",
+  "Err.PrepareFailure": "准备失败：{0}",
+  "Err.HandshakeHttp": "握手失败 HTTP {0} ({1})",
+  "Err.HandshakeRejected": "握手被拒({0})：{1}",
+  "Err.ConnectFailed": "连接失败({0})：{1}",
+  "Err.PeerRejected": "对方拒绝接收（未说明原因）",
+  "Err.PeerRejectedReason": "对方拒绝：{0}",
+  "Err.ChunkSendFailed": "切片 {0} 发送失败：{1}",
+  "Err.ResumeFailed": "恢复失败：{0}",
+  "Err.Sha256Mismatch": "SHA256 校验失败"
 }

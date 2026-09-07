@@ -110,7 +110,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            task.ErrorMessage = $"准备失败: {ex.Message}";
+            SetError(task, $"准备失败: {ex.Message}", "Err.PrepareFailure", ex.Message);
             SetState(task, task.State, TransferState.Failed);
             return;
         }
@@ -158,13 +158,15 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                     (reason.Contains('{') || reason.StartsWith("\"") || reason.Length > 300))
                 {
                     // 如果是 JSON 或过长文本，降级展示 HTTP 状态码
-                    task.ErrorMessage = $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})";
+                    SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
+                }
+                else if (string.IsNullOrEmpty(reason))
+                {
+                    SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
                 }
                 else
                 {
-                    task.ErrorMessage = string.IsNullOrEmpty(reason)
-                        ? $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})"
-                        : $"握手被拒({(int)resp.StatusCode}): {reason.Trim()}";
+                    SetError(task, $"握手被拒({(int)resp.StatusCode}): {reason.Trim()}", "Err.HandshakeRejected", (int)resp.StatusCode, reason.Trim());
                 }
                 SetState(task, task.State, TransferState.Failed);
                 return;
@@ -175,16 +177,17 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         {
             // HttpRequestException/SocketException: 通常是 IP:port 不可达、目标未启动 HTTP 服务、防火墙拒绝
             var detail = ex.InnerException?.Message ?? ex.Message;
-            task.ErrorMessage = $"连接失败({baseUri}): {detail}";
+            SetError(task, $"连接失败({baseUri}): {detail}", "Err.ConnectFailed", baseUri, detail);
             SetState(task, task.State, TransferState.Failed);
             return;
         }
 
         if (prep is null || !prep.Accepted)
         {
-            task.ErrorMessage = string.IsNullOrEmpty(prep?.Reason)
-                ? "对方拒绝接收 (未说明原因)"
-                : $"对方拒绝: {prep.Reason}";
+            if (string.IsNullOrEmpty(prep?.Reason))
+                SetError(task, "对方拒绝接收 (未说明原因)", "Err.PeerRejected");
+            else
+                SetError(task, $"对方拒绝: {prep.Reason}", "Err.PeerRejectedReason", prep.Reason);
             SetState(task, task.State, TransferState.Cancelled);
             return;
         }
@@ -240,7 +243,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                task.ErrorMessage = $"切片 {idx} 发送失败: {ex.Message}";
+                SetError(task, $"切片 {idx} 发送失败: {ex.Message}", "Err.ChunkSendFailed", idx, ex.Message);
                 TryTransition(task, TransferState.Disconnected);
                 return;
             }
@@ -317,7 +320,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         }
         catch (Exception ex)
         {
-            task.ErrorMessage = $"恢复失败: {ex.Message}";
+            SetError(task, $"恢复失败: {ex.Message}", "Err.ResumeFailed", ex.Message);
             TryTransition(task, TransferState.Disconnected);
         }
     }
@@ -476,7 +479,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             if (!string.IsNullOrEmpty(task.Sha256) &&
                 !actual.Equals(task.Sha256, StringComparison.OrdinalIgnoreCase))
             {
-                task.ErrorMessage = "SHA256 校验失败";
+                SetError(task, "SHA256 校验失败", "Err.Sha256Mismatch");
                 SetState(task, task.State, TransferState.Failed);
                 return;
             }
@@ -572,6 +575,17 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     public IReadOnlyList<TransferTaskInfo> GetTasks() => _tasks.Values.ToList();
     public TransferTaskInfo? GetTask(string fileId) => _tasks.TryGetValue(fileId, out var t) ? t : null;
+
+    /// <summary>
+    /// 记录任务错误：同时写入本地化错误码（Err.*）与原始兜底文案。
+    /// UI 层优先按 ErrorCode/ErrorArgs 转本地化文本，资源缺失时回退 ErrorMessage。
+    /// </summary>
+    private static void SetError(TransferTaskInfo task, string message, string errorCode, params object[] args)
+    {
+        task.ErrorMessage = message;
+        task.ErrorCode = errorCode;
+        task.ErrorArgs = args.Length == 0 ? null : args;
+    }
 
     private void SetState(TransferTaskInfo task, TransferState expectedFrom, TransferState to)
     {

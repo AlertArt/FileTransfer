@@ -33,6 +33,15 @@ public sealed class TransferTaskInfo
     public DateTime EndedUtc { get; set; }
     public string? ErrorMessage { get; set; }
 
+    /// <summary>
+    /// 本地化错误码（Err.* 资源 key）。引擎写入，UI 层据此转成本地化文案；
+    /// 为空时 UI 直接展示 <see cref="ErrorMessage"/> 原文。
+    /// </summary>
+    public string? ErrorCode { get; set; }
+
+    /// <summary><see cref="ErrorCode"/> 的格式化参数</summary>
+    public object[]? ErrorArgs { get; set; }
+
     /// <summary>暂停令牌源（控制本任务传输循环）</summary>
     [field: NonSerialized]
     public System.Threading.CancellationTokenSource? PauseCts { get; set; }

@@ -46,5 +46,14 @@
   "Approval.Size": "Size: {0}",
   "Approval.Sha256": "SHA256: {0}",
   "Approval.Accept": "Accept",
-  "Approval.Reject": "Reject"
+  "Approval.Reject": "Reject",
+  "Err.PrepareFailure": "Prepare failed: {0}",
+  "Err.HandshakeHttp": "Handshake failed HTTP {0} ({1})",
+  "Err.HandshakeRejected": "Handshake rejected ({0}): {1}",
+  "Err.ConnectFailed": "Connection failed ({0}): {1}",
+  "Err.PeerRejected": "Peer rejected transfer (no reason given)",
+  "Err.PeerRejectedReason": "Peer rejected: {0}",
+  "Err.ChunkSendFailed": "Chunk {0} failed to send: {1}",
+  "Err.ResumeFailed": "Resume failed: {0}",
+  "Err.Sha256Mismatch": "SHA256 verification failed"
 }
