@@ -369,16 +369,16 @@
                                                     </Grid>
                                                 </Grid>
 
-                                                <!-- [错误提示行]：失败/断开/取消时显示红色错误原因 -->
+                                                <!-- [错误提示行]：失败/断开/取消时显示错误原因（两套主题令牌） -->
                                                 <Border Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
-                                                        Background="#FFFBF0"
-                                                        BorderBrush="#FFB4A0"
+                                                        Background="{DynamicResource Brush.ErrorBg}"
+                                                        BorderBrush="{DynamicResource Brush.ErrorBorder}"
                                                         BorderThickness="1"
                                                         CornerRadius="{DynamicResource Radius.Sm}"
                                                         Padding="8,5"
                                                         IsVisible="{Binding ShowErrorHint}">
                                                     <TextBlock Text="{Binding ErrorMessage}"
-                                                               Foreground="#B42318"
+                                                               Foreground="{DynamicResource Brush.ErrorText}"
                                                                FontSize="12"
                                                                TextWrapping="Wrap" />
                                                 </Border>

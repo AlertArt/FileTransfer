@@ -12,7 +12,86 @@
          +++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
     <Application.Resources>
         <ResourceDictionary>
-            <!-- [Colors] -->
+            <!-- [主题相关令牌]：表面 / 文字 / 边框 分 Light + Dark 两套，
+                 跟随系统 RequestedThemeVariant(Default) 自动切换 -->
+            <ResourceDictionary.ThemeDictionaries>
+                <!-- Light -->
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="Color.Surface">#FFFFFF</Color>
+                    <Color x:Key="Color.SurfaceAlt">#F8FAFC</Color>
+                    <Color x:Key="Color.SurfaceMuted">#F1F5F9</Color>
+                    <Color x:Key="Color.Border">#E2E8F0</Color>
+                    <Color x:Key="Color.BorderStrong">#CBD5E1</Color>
+                    <Color x:Key="Color.TextPrimary">#0F172A</Color>
+                    <Color x:Key="Color.TextSecondary">#475569</Color>
+                    <Color x:Key="Color.TextMuted">#94A3B8</Color>
+                    <Color x:Key="Color.TextOnBrand">#FFFFFF</Color>
+                    <!-- 语义 soft 色：浅色下用柔和的浅底 + 深色前景 -->
+                    <Color x:Key="Color.ErrorBg">#FFFBF0</Color>
+                    <Color x:Key="Color.ErrorBorder">#FFB4A0</Color>
+                    <Color x:Key="Color.ErrorText">#B42318</Color>
+                    <Color x:Key="Color.DangerSoftBg">#FEF2F2</Color>
+                    <Color x:Key="Color.DangerSoftBorder">#FECACA</Color>
+                    <Color x:Key="Color.SelectionBg">#EEF2FF</Color>
+                    <Color x:Key="Color.SelectionFg">#4F46E5</Color>
+
+                    <SolidColorBrush x:Key="Brush.Surface" Color="{StaticResource Color.Surface}" />
+                    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="{StaticResource Color.SurfaceAlt}" />
+                    <SolidColorBrush x:Key="Brush.SurfaceMuted" Color="{StaticResource Color.SurfaceMuted}" />
+                    <SolidColorBrush x:Key="Brush.Border" Color="{StaticResource Color.Border}" />
+                    <SolidColorBrush x:Key="Brush.BorderStrong" Color="{StaticResource Color.BorderStrong}" />
+                    <SolidColorBrush x:Key="Brush.TextPrimary" Color="{StaticResource Color.TextPrimary}" />
+                    <SolidColorBrush x:Key="Brush.TextSecondary" Color="{StaticResource Color.TextSecondary}" />
+                    <SolidColorBrush x:Key="Brush.TextMuted" Color="{StaticResource Color.TextMuted}" />
+                    <SolidColorBrush x:Key="Brush.TextOnBrand" Color="{StaticResource Color.TextOnBrand}" />
+                    <SolidColorBrush x:Key="Brush.ErrorBg" Color="{StaticResource Color.ErrorBg}" />
+                    <SolidColorBrush x:Key="Brush.ErrorBorder" Color="{StaticResource Color.ErrorBorder}" />
+                    <SolidColorBrush x:Key="Brush.ErrorText" Color="{StaticResource Color.ErrorText}" />
+                    <SolidColorBrush x:Key="Brush.DangerSoftBg" Color="{StaticResource Color.DangerSoftBg}" />
+                    <SolidColorBrush x:Key="Brush.DangerSoftBorder" Color="{StaticResource Color.DangerSoftBorder}" />
+                    <SolidColorBrush x:Key="Brush.SelectionBg" Color="{StaticResource Color.SelectionBg}" />
+                    <SolidColorBrush x:Key="Brush.SelectionFg" Color="{StaticResource Color.SelectionFg}" />
+                </ResourceDictionary>
+                <!-- Dark：slate 基底，与 Light 保持同构键集 -->
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="Color.Surface">#0F172A</Color>
+                    <Color x:Key="Color.SurfaceAlt">#172033</Color>
+                    <Color x:Key="Color.SurfaceMuted">#1E293B</Color>
+                    <Color x:Key="Color.Border">#263449</Color>
+                    <Color x:Key="Color.BorderStrong">#334155</Color>
+                    <Color x:Key="Color.TextPrimary">#E2E8F0</Color>
+                    <Color x:Key="Color.TextSecondary">#94A3B8</Color>
+                    <Color x:Key="Color.TextMuted">#64748B</Color>
+                    <Color x:Key="Color.TextOnBrand">#FFFFFF</Color>
+                    <!-- 语义 soft 色：深色下用深琥珀红底色 + 亮琥珀前景保证对比 -->
+                    <Color x:Key="Color.ErrorBg">#3D2A12</Color>
+                    <Color x:Key="Color.ErrorBorder">#92400E</Color>
+                    <Color x:Key="Color.ErrorText">#FDE68A</Color>
+                    <Color x:Key="Color.DangerSoftBg">#450A0A</Color>
+                    <Color x:Key="Color.DangerSoftBorder">#7F1D1D</Color>
+                    <Color x:Key="Color.SelectionBg">#312E81</Color>
+                    <Color x:Key="Color.SelectionFg">#C7D2FE</Color>
+
+                    <SolidColorBrush x:Key="Brush.Surface" Color="{StaticResource Color.Surface}" />
+                    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="{StaticResource Color.SurfaceAlt}" />
+                    <SolidColorBrush x:Key="Brush.SurfaceMuted" Color="{StaticResource Color.SurfaceMuted}" />
+                    <SolidColorBrush x:Key="Brush.Border" Color="{StaticResource Color.Border}" />
+                    <SolidColorBrush x:Key="Brush.BorderStrong" Color="{StaticResource Color.BorderStrong}" />
+                    <SolidColorBrush x:Key="Brush.TextPrimary" Color="{StaticResource Color.TextPrimary}" />
+                    <SolidColorBrush x:Key="Brush.TextSecondary" Color="{StaticResource Color.TextSecondary}" />
+                    <SolidColorBrush x:Key="Brush.TextMuted" Color="{StaticResource Color.TextMuted}" />
+                    <SolidColorBrush x:Key="Brush.TextOnBrand" Color="{StaticResource Color.TextOnBrand}" />
+                    <SolidColorBrush x:Key="Brush.ErrorBg" Color="{StaticResource Color.ErrorBg}" />
+                    <SolidColorBrush x:Key="Brush.ErrorBorder" Color="{StaticResource Color.ErrorBorder}" />
+                    <SolidColorBrush x:Key="Brush.ErrorText" Color="{StaticResource Color.ErrorText}" />
+                    <SolidColorBrush x:Key="Brush.DangerSoftBg" Color="{StaticResource Color.DangerSoftBg}" />
+                    <SolidColorBrush x:Key="Brush.DangerSoftBorder" Color="{StaticResource Color.DangerSoftBorder}" />
+                    <SolidColorBrush x:Key="Brush.SelectionBg" Color="{StaticResource Color.SelectionBg}" />
+                    <SolidColorBrush x:Key="Brush.SelectionFg" Color="{StaticResource Color.SelectionFg}" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- [Colors]：品牌 / 语义色，两套主题共用（品牌渐变恒定） -->
             <Color x:Key="Color.Brand">#6366F1</Color>
             <Color x:Key="Color.BrandDark">#4F46E5</Color>
             <Color x:Key="Color.BrandLight">#A5B4FC</Color>
@@ -22,18 +101,7 @@
             <Color x:Key="Color.Danger">#EF4444</Color>
             <Color x:Key="Color.Info">#3B82F6</Color>
 
-            <Color x:Key="Color.Surface">#FFFFFF</Color>
-            <Color x:Key="Color.SurfaceAlt">#F8FAFC</Color>
-            <Color x:Key="Color.SurfaceMuted">#F1F5F9</Color>
-            <Color x:Key="Color.Border">#E2E8F0</Color>
-            <Color x:Key="Color.BorderStrong">#CBD5E1</Color>
-
-            <Color x:Key="Color.TextPrimary">#0F172A</Color>
-            <Color x:Key="Color.TextSecondary">#475569</Color>
-            <Color x:Key="Color.TextMuted">#94A3B8</Color>
-            <Color x:Key="Color.TextOnBrand">#FFFFFF</Color>
-
-            <!-- [Brushes] -->
+            <!-- [Brushes]：品牌 / 语义色 -->
             <SolidColorBrush x:Key="Brush.Brand" Color="{StaticResource Color.Brand}" />
             <SolidColorBrush x:Key="Brush.BrandDark" Color="{StaticResource Color.BrandDark}" />
             <SolidColorBrush x:Key="Brush.Accent" Color="{StaticResource Color.Accent}" />
@@ -45,17 +113,6 @@
                 <GradientStop Color="{StaticResource Color.Brand}" Offset="0" />
                 <GradientStop Color="{StaticResource Color.Accent}" Offset="1" />
             </LinearGradientBrush>
-
-            <SolidColorBrush x:Key="Brush.Surface" Color="{StaticResource Color.Surface}" />
-            <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="{StaticResource Color.SurfaceAlt}" />
-            <SolidColorBrush x:Key="Brush.SurfaceMuted" Color="{StaticResource Color.SurfaceMuted}" />
-            <SolidColorBrush x:Key="Brush.Border" Color="{StaticResource Color.Border}" />
-            <SolidColorBrush x:Key="Brush.BorderStrong" Color="{StaticResource Color.BorderStrong}" />
-
-            <SolidColorBrush x:Key="Brush.TextPrimary" Color="{StaticResource Color.TextPrimary}" />
-            <SolidColorBrush x:Key="Brush.TextSecondary" Color="{StaticResource Color.TextSecondary}" />
-            <SolidColorBrush x:Key="Brush.TextMuted" Color="{StaticResource Color.TextMuted}" />
-            <SolidColorBrush x:Key="Brush.TextOnBrand" Color="{StaticResource Color.TextOnBrand}" />
 
             <SolidColorBrush x:Key="Brush.Success" Color="{StaticResource Color.Success}" />
             <SolidColorBrush x:Key="Brush.Warning" Color="{StaticResource Color.Warning}" />
@@ -141,9 +198,9 @@
 
         <!-- 危险操作按钮 (Classes=Danger) -->
         <Style Selector="Button.Danger">
-            <Setter Property="Background" Value="#FEF2F2" />
+            <Setter Property="Background" Value="{DynamicResource Brush.DangerSoftBg}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}" />
-            <Setter Property="BorderBrush" Value="#FECACA" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.DangerSoftBorder}" />
         </Style>
 
         <!-- 幽灵/仅图标按钮 (Classes=Icon)：紧凑、无描边 -->
@@ -204,8 +261,8 @@
             <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}" />
         </Style>
         <Style Selector="ListBoxItem:selected">
-            <Setter Property="Background" Value="#EEF2FF" />
-            <Setter Property="Foreground" Value="{DynamicResource Brush.BrandDark}" />
+            <Setter Property="Background" Value="{DynamicResource Brush.SelectionBg}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.SelectionFg}" />
         </Style>
 
         <!-- 卡片 Border (Classes=Card)：阴影只在 Border 上生效 -->
