@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 公共 Download 目录（/sdcard/Download）：MANAGE_EXTERNAL_STORAGE 权限下可直接读写 -->
+    <external-path name="external_downloads" path="Download/" />
+    <!-- 应用私有外存（/sdcard/Android/data/<pkg>/files/Download）：无需权限 -->
+    <external-files-path name="external_files_downloads" path="Download/" />
+</paths>

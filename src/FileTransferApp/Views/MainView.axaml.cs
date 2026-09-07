@@ -135,4 +135,14 @@ public partial class MainView : UserControl
         if (paths.Count > 0)
             await vm.SendFilesAsync(paths.ToArray());
     }
+
+    /// <summary>双击已完成的接收卡片：使用系统默认程序打开已保存的文件</summary>
+    private async void TransferCard_DoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is not Visual visual) return;
+        if (visual.DataContext is not TransferItemViewModel vm) return;
+        if (!vm.CanOpenFile || string.IsNullOrEmpty(vm.LocalPath)) return;
+        e.Handled = true;
+        await vm.OpenFileCommand.ExecuteAsync(null);
+    }
 }

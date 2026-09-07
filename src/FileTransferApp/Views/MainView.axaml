@@ -259,7 +259,8 @@
                                                 CornerRadius="{DynamicResource Radius.Lg}"
                                                 BorderBrush="{DynamicResource Brush.Border}"
                                                 BorderThickness="1"
-                                                BoxShadow="{DynamicResource Shadow.Sm}">
+                                                BoxShadow="{DynamicResource Shadow.Sm}"
+                                                DoubleTapped="TransferCard_DoubleTapped">
                                             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                                                   ColumnSpacing="10" RowSpacing="5">
 

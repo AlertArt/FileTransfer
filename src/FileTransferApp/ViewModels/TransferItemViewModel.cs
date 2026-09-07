@@ -8,6 +8,7 @@ using FileTransferApp.Core.Messaging;
 using FileTransferApp.Core.Models;
 using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FileTransferApp.ViewModels;
 
@@ -27,6 +28,8 @@ public partial class TransferItemViewModel : ObservableObject,
 
     public string FileId => _task.FileId;
     public TransferDirection Direction => _task.Direction;
+    /// <summary>接收完成后最终保存路径（发送任务为 null）</summary>
+    public string? LocalPath => _task.LocalPath;
 
     [ObservableProperty] public partial string FileName { get; set; }
     [ObservableProperty] public partial long TotalBytes { get; set; }
@@ -50,6 +53,8 @@ public partial class TransferItemViewModel : ObservableObject,
     [ObservableProperty] public partial bool CanDelete { get; set; }
     /// <summary>任务出错（断开/失败）：显示重试按钮，重新握手并续传剩余切片</summary>
     [ObservableProperty] public partial bool CanRetry { get; set; }
+    /// <summary>已完成的接收任务：双击卡片可打开文件</summary>
+    [ObservableProperty] public partial bool CanOpenFile { get; set; }
     /// <summary>
     /// 错误/警告信息：失败 / 已断开 / 已取消时展示，用于用户自助排查。
     /// 取值来源：TransferTaskInfo.ErrorMessage（由引擎填充），空串表示无错误信息不显示。
@@ -238,6 +243,15 @@ public partial class TransferItemViewModel : ObservableObject,
     [RelayCommand]
     private Task DeleteAsync() => _engine.RemoveTaskAsync(FileId);
 
+    [RelayCommand]
+    private async Task OpenFileAsync()
+    {
+        if (string.IsNullOrEmpty(LocalPath)) return;
+        var svc = ServiceLocator.Services?.GetRequiredService<IFileOpenService>();
+        if (svc is not null)
+            await svc.OpenFileAsync(LocalPath).ConfigureAwait(false);
+    }
+
     // ---- helpers ----
     private void RefreshStateFlags(TransferState s)
     {
@@ -249,6 +263,10 @@ public partial class TransferItemViewModel : ObservableObject,
         CanDelete = IsTerminal;
         // 断开 / 失败 → 可重试（重新握手 + 续传）
         CanRetry = s is TransferState.Disconnected or TransferState.Failed;
+        // 已完成的接收任务 → 双击可打开文件
+        CanOpenFile = s == TransferState.Completed
+                      && _task.Direction == TransferDirection.Receive
+                      && !string.IsNullOrEmpty(_task.LocalPath);
     }
 
     private static string StateToText(TransferState s)

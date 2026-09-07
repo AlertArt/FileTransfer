@@ -36,6 +36,7 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
         // iOS 平台服务：前台保活（熄屏禁用 + 后台任务标识 + 用户提示）+ 沙箱 Documents 存储
         services.AddSingleton<IPlatformKeepAliveService, IOSKeepAliveService>();
         services.AddSingleton<IStorageService, IOSStorageService>();
+        services.AddSingleton<IFileOpenService, IOSFileOpenService>();
         services.AddFileTransferServices(GetDeviceName(), DeviceType.iOS);
         ServiceLocator.Services = services.BuildServiceProvider();
     }

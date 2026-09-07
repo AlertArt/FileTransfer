@@ -90,6 +90,7 @@ public class MainActivity : AvaloniaMainActivity
         // Android 平台服务：前台保活 + 应用私有目录存储
         services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
         services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
+        services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
         services.AddFileTransferServices(GetDeviceName(), DeviceType.Android);
         ServiceLocator.Services = services.BuildServiceProvider();
     }
