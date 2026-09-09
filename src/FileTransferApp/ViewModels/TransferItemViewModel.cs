@@ -35,6 +35,17 @@ public partial class TransferItemViewModel : ObservableObject,
     [ObservableProperty] public partial long TotalBytes { get; set; }
     [ObservableProperty] public partial long BytesTransferred { get; set; }
     [ObservableProperty] public partial double ProgressPercentage { get; set; }
+    /// <summary>平滑播放显示的进度（0-100）。快传时中间帧被进度限频吞掉，直接从 0 跳 100，
+    /// 用指数补间把跳变拉开为连续动画。</summary>
+    private double _animatedProgress;
+    public double AnimatedProgress
+    {
+        get => _animatedProgress;
+        private set { if (_animatedProgress != value) { _animatedProgress = value; OnPropertyChanged(); } }
+    }
+    private DispatcherTimer? _progressTimer;
+    private double _progressTarget;
+    private const double ProgressSmoothStep = 0.3;
     [ObservableProperty] public partial string SpeedText { get; set; } = "0 KB/s";
     /// <summary>文件总大小的可读文本：12.3 MB / 1.2 GB</summary>
     [ObservableProperty] public partial string TotalSizeText { get; set; } = "0 B";
@@ -73,6 +84,7 @@ public partial class TransferItemViewModel : ObservableObject,
         TotalBytes = task.TotalBytes;
         BytesTransferred = task.BytesTransferred;
         ProgressPercentage = task.ProgressPercentage;
+        AnimatedProgress = ProgressPercentage;
         TotalSizeText = Core.Services.Impl.SpeedFormatter.FormatSize(TotalBytes);
         MetaText = BuildMetaText(Direction, TotalBytes);
         State = task.State;
@@ -106,6 +118,7 @@ public partial class TransferItemViewModel : ObservableObject,
             BytesTransferred = message.BytesTransferred;
             TotalBytes = message.TotalBytes;
             ProgressPercentage = TotalBytes <= 0 ? 0 : Math.Clamp((double)BytesTransferred / TotalBytes * 100, 0, 100);
+            AnimateProgressTo(ProgressPercentage);
             SpeedText = FormatSpeed(message.SpeedBytesPerSecond);
             // 同步 task 当前状态：防止因注册时序竞态漏接 TransferStatusChangedMessage
             var currentTask = _engine.GetTask(FileId);
@@ -138,6 +151,7 @@ public partial class TransferItemViewModel : ObservableObject,
         {
             BytesTransferred = TotalBytes;
             ProgressPercentage = 100;
+            AnimateProgressTo(100);
             RefreshThumbnailFromTask();
         }
     }
@@ -164,6 +178,7 @@ public partial class TransferItemViewModel : ObservableObject,
         {
             BytesTransferred = TotalBytes;
             ProgressPercentage = 100;
+            AnimateProgressTo(100);
             // 接收成功后，若 ThumbnailImage 仍为空则再尝试从 task 最新 ThumbnailBase64 解析
             RefreshThumbnailFromTask();
         }
@@ -253,6 +268,32 @@ public partial class TransferItemViewModel : ObservableObject,
     }
 
     // ---- helpers ----
+    /// <summary>把进度平滑推进到 target。快传时中间帧被引擎限频吞掉，直接从 0 跳 100，
+    /// 用指数补间把跳变拉开为连续动画，避免进度条/百分比生硬瞬变。</summary>
+    private void AnimateProgressTo(double target)
+    {
+        if (_progressTimer is null)
+            _progressTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Normal, (_, _) => TickProgress());
+        _progressTarget = target;
+        if (Math.Abs(_progressTarget - AnimatedProgress) < 0.4)
+        {
+            _progressTimer.Stop();
+            AnimatedProgress = _progressTarget;
+            return;
+        }
+        if (!_progressTimer.IsEnabled) _progressTimer.Start();
+    }
+
+    private void TickProgress()
+    {
+        var next = AnimatedProgress + (_progressTarget - AnimatedProgress) * ProgressSmoothStep;
+        AnimatedProgress = next;
+        if (Math.Abs(_progressTarget - AnimatedProgress) < 0.35)
+        {
+            _progressTimer?.Stop();
+            AnimatedProgress = _progressTarget;
+        }
+    }
     private void RefreshStateFlags(TransferState s)
     {
         IsRunning = s == TransferState.Transferring;
