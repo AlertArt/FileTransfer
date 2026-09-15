@@ -1,8 +1,10 @@
 using System.Net;
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using FileTransferApp.Core.Diagnostics;
 using FileTransferApp.Core.Models;
 using FileTransferApp.Core.Protocols;
 using FileTransferApp.Core.Services.Interfaces;
@@ -30,6 +32,7 @@ public sealed class TransferHttpServer : ITransferServer
     {
         if (Interlocked.CompareExchange(ref _running, 1, 0) == 1) return Task.CompletedTask;
 
+        FtaTrace.Info("FTA.VER", BuildVersion());
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _listener = new TcpListener(IPAddress.Any, ProtocolConstants.TransferPort);
         _listener.Start();
@@ -102,6 +105,7 @@ public sealed class TransferHttpServer : ITransferServer
                         break;
                 }
 
+                FtaTrace.Info("FTA.HTTP", $"REQ {request.Method} {request.Path} -> {status} from {peer.IpAddress}:{peer.Port}");
                 await WriteResponseAsync(stream, status, responseJson).ConfigureAwait(false);
             }
         }
@@ -166,14 +170,20 @@ public sealed class TransferHttpServer : ITransferServer
         try
         {
             var ctl = Deserialize<ControlRequest>(req.Body);
+            FtaTrace.Info("FTA.HTTP", $"REQ POST {req.Path} | Content-Length={req.Body.Length} | ctl={(ctl is null ? "NULL" : $"FileId={ctl.FileId} Action='{ctl.Action}'")} | body={TruncateForLog(req.Body)}");
             if (ctl is null || !Enum.TryParse<TransferAction>(ctl.Action, ignoreCase: true, out var action))
+            {
+                FtaTrace.Warn("FTA.HTTP", $"control parse FAIL -> 400 (ctl={(ctl is null ? "null" : $"Action='{ctl.Action}'")})");
                 return BadRequest("无效的 action");
+            }
 
+            FtaTrace.Info("FTA.CTRL", $"<- {action} {ctl.FileId} (server)");
             await _engine.ApplyControlAsync(ctl.FileId, action).ConfigureAwait(false);
             return (200, Serialize(new ControlResponse()));
         }
         catch (Exception ex)
         {
+            FtaTrace.Warn("FTA.HTTP", $"control handler EXCEPTION -> 500: {ex}");
             return (500, Serialize(new ErrorResponse { Error = ex.Message }));
         }
     }
@@ -300,6 +310,15 @@ public sealed class TransferHttpServer : ITransferServer
     }
 
     internal static string Serialize<T>(T obj) => JsonSerializer.Serialize(obj, JsonOpts);
+
+    /// <summary>构建版本标识写入日志，用于区分两端是否同一构建（排查旧版 chunked 上传误报）。</summary>
+    internal static string BuildVersion()
+    {
+        var asm = typeof(TransferHttpServer).Assembly;
+        var fileVer = asm.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "?";
+        var infoVer = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
+        return $"{fileVer} ({infoVer})";
+    }
 
     /// <summary>
     /// 反序列化选项：发送端 HttpClient.PostAsJsonAsync 默认使用 camelCase 属性名

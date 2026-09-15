@@ -2,6 +2,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
 using FileTransferApp.ViewModels;
@@ -14,6 +15,10 @@ public partial class App : Application
 {
     public override void Initialize()
     {
+        // 中文回退字体：Android 端（及桌面端）缺少 CJK 字形时回退到内嵌的 Noto Sans CJK SC，
+        // 否则 Android 平板上中文会渲染成豆腐块（□□□）。
+        // 必须在 FontManager 首次构造（首次文本渲染）前完成，见 FontFallbackRegistrar。
+        FontFallbackRegistrar.Register();
         AvaloniaXamlLoader.Load(this);
 #if DEBUG
         this.AttachDeveloperTools();
@@ -50,6 +55,8 @@ public partial class App : Application
             _ = WaitForDiAndBindMainViewAsync();
         }
         _ = StartBackgroundServicesAsync(); // 内部也会等 DI
+        // 首次渲染后验证内嵌中文字体可解析（桌面端提前暴露 URI 写错/资源缺失等问题）
+        Avalonia.Threading.Dispatcher.UIThread.Post(FontFallbackRegistrar.VerifyEmbeddedFont);
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -197,20 +204,19 @@ public partial class App : Application
 
         public static void Log(string msg)
         {
-            var line = $"[{DateTime.Now:HH:mm:ss.fff}] {msg}";
-            try { System.Diagnostics.Trace.WriteLine(line, Tag); } catch { /* ignore */ }
+            try { Core.Diagnostics.FtaTrace.Info(Tag, msg); } catch { /* ignore */ }
             try { _androidLogInfo?.Invoke(Tag, msg); } catch { /* ignore */ }
         }
 
         public static void Warn(string msg)
         {
-            try { System.Diagnostics.Trace.TraceWarning($"[{Tag}] {msg}"); } catch { /* ignore */ }
+            try { Core.Diagnostics.FtaTrace.Warn(Tag, msg); } catch { /* ignore */ }
             try { _androidLogWarn?.Invoke(Tag, msg); } catch { /* ignore */ }
         }
 
         public static void Error(string msg)
         {
-            try { System.Diagnostics.Trace.TraceError($"[{Tag}] {msg}"); } catch { /* ignore */ }
+            try { Core.Diagnostics.FtaTrace.Warn(Tag, $"ERROR {msg}"); } catch { /* ignore */ }
             try { _androidLogError?.Invoke(Tag, msg); } catch { /* ignore */ }
         }
 

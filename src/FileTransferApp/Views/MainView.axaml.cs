@@ -4,19 +4,21 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using FileTransferApp.Services;
 using FileTransferApp.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FileTransferApp.Views;
 
 public partial class MainView : UserControl
 {
     // 响应式阈值（基于主流手机分辨率 dp）：
-    //   竖屏手机 360-411dp 宽 < 600 → IsCompact (单列上下布局)
-    //   横屏手机 640-900dp 宽 ≥ 600 但高 360-411dp < 500 → IsShort (两栏但压缩纵向 padding)
-    //   平板/桌面 800+ × 500+ → 标准两栏
-    private const double CompactWidthThreshold = 600.0;
+    //   竖屏手机/窄屏 360-600dp 宽 ≤ 620 → IsCompact (单列上下布局)
+    //   平板/桌面 640+ × 500+ → 标准两栏
+    private const double CompactWidthThreshold = 620.0;
     private const double ShortHeightThreshold = 500.0;
     // 记录上次应用的模式，避免 LayoutUpdated 重复触发
     private bool _lastAppliedCompact;
@@ -30,64 +32,6 @@ public partial class MainView : UserControl
         AddHandler(DragDrop.DropEvent, OnDrop);
         // 监听控件尺寸变化：驱动响应式布局
         LayoutUpdated += MainView_LayoutUpdated;
-
-        InitializeLanguageCombo();
-        InitializeThemeCombo();
-    }
-
-    private void InitializeLanguageCombo()
-    {
-        if (LanguageCombo is null) return;
-        LanguageCombo.ItemsSource = LocalizationService.SupportedLanguages
-            .Select(l => l.DisplayName)
-            .ToList();
-        var current = LocalizationService.Instance.CurrentLanguage;
-        var idx = Array.FindIndex(LocalizationService.SupportedLanguages, l => l.Code == current);
-        LanguageCombo.SelectedIndex = idx >= 0 ? idx : 0;
-    }
-
-    private void OnLanguageChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (LanguageCombo is null || LanguageCombo.SelectedIndex < 0) return;
-        var lang = LocalizationService.SupportedLanguages[LanguageCombo.SelectedIndex];
-        LocalizationService.Instance.SetLanguage(lang.Code);
-    }
-
-    private void InitializeThemeCombo()
-    {
-        if (ThemeCombo is null) return;
-        // 监听语言切换：重新本地化主题选项文本
-        LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
-        RefreshThemeComboItems();
-        RefreshThemeSelection();
-    }
-
-    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
-        RefreshThemeComboItems();
-        RefreshThemeSelection();
-    }
-
-    private void RefreshThemeComboItems()
-    {
-        ThemeCombo.ItemsSource = ThemeService.SupportedThemes
-            .Select(t => LocalizationService.Instance[t.Key])
-            .ToList();
-    }
-
-    private void RefreshThemeSelection()
-    {
-        var current = ThemeService.Instance.Current;
-        var idx = Array.FindIndex(ThemeService.SupportedThemes, t => t.Value == current);
-        ThemeCombo.SelectedIndex = idx >= 0 ? idx : 0;
-    }
-
-    private void OnThemeChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (ThemeCombo is null || ThemeCombo.SelectedIndex < 0) return;
-        var option = ThemeService.SupportedThemes[ThemeCombo.SelectedIndex];
-        ThemeService.Instance.Apply(option.Value);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -105,7 +49,7 @@ public partial class MainView : UserControl
     private void ApplyResponsiveMode(double width, double height)
     {
         if (DataContext is not MainViewModel vm) return;
-        bool shouldBeCompact = width > 0 && width < CompactWidthThreshold;
+        bool shouldBeCompact = width > 0 && width <= CompactWidthThreshold;
         // 矮屏(横屏手机)：宽度足够两栏但高度不足，需压缩顶栏/底栏纵向尺寸
         // 与 IsCompact 互斥：IsCompact 优先(更窄约束，单列布局已能容纳)
         bool shouldBeShort = !shouldBeCompact && height > 0 && height < ShortHeightThreshold;
@@ -181,6 +125,62 @@ public partial class MainView : UserControl
         if (visual.DataContext is not TransferItemViewModel vm) return;
         if (!vm.CanOpenFile || string.IsNullOrEmpty(vm.LocalPath)) return;
         e.Handled = true;
-        await vm.OpenFileCommand.ExecuteAsync(null);
+        try
+        {
+            await vm.OpenFileCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            // async void 处理器内任何异常外泄都会导致整个进程闪退（Android），必须全拦
+            System.Diagnostics.Trace.WriteLine($"FTA.FILE: DoubleTapped open FAIL: {ex}");
+        }
+    }
+
+    // ===================== 设置 / 日志 / 关于 覆盖面板 =====================
+
+    private LogsView? _logsView;
+    private AboutView? _aboutView;
+    private SettingsView? _settingsView;
+
+    /// <summary>底栏齿轮：打开设置页（主题/语言/日志/关于 统一入口）。</summary>
+    private void OnOpenSettingsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_settingsView is null)
+        {
+            _settingsView = new SettingsView();
+            // 设置页内的"日志 / 关于"子入口，导航到对应子页面
+            _settingsView.LogsRequested += (_, _) => OpenLogs();
+            _settingsView.AboutRequested += (_, _) => OpenAbout();
+        }
+        ShowOverlay(LocalizationService.Instance.GetString("SettingsTitle"), _settingsView);
+    }
+
+    private void OpenLogs()
+    {
+        var vm = ServiceLocator.Services.GetService<LogsViewModel>();
+        if (vm is null) return;
+        vm.Load();
+        if (_logsView is null) _logsView = new LogsView();
+        _logsView.DataContext = vm;
+        ShowOverlay(LocalizationService.Instance.GetString("LogsTitle"), _logsView);
+    }
+
+    private void OpenAbout()
+    {
+        if (_aboutView is null) _aboutView = new AboutView();
+        ShowOverlay(LocalizationService.Instance.GetString("AboutTitle"), _aboutView);
+    }
+
+    private void OnCloseOverlayClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        OverlayPane.IsVisible = false;
+        OverlayContent.Content = null;
+    }
+
+    private void ShowOverlay(string title, Control content)
+    {
+        OverlayTitle.Text = title;
+        OverlayContent.Content = content;
+        OverlayPane.IsVisible = true;
     }
 }

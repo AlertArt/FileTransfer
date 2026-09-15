@@ -20,6 +20,49 @@ namespace FileTransferApp.Core.Tests;
 /// </summary>
 public class TransferHttpServerTests
 {
+    // ==================== 回归：引擎 JSON 内容必须携带 Content-Length，禁止 chunked ====================
+
+    /// <summary>
+    /// 根因回归：.NET 的 HttpClient.PostAsJsonAsync 会以 Transfer-Encoding: chunked 发送
+    /// （无 Content-Length 头），简易 HTTP 服务器只认 Content-Length，导致 body 读空 → 400，
+    /// 表现为暂停/恢复状态无法同步到对端。引擎统一改用 BuildJsonContent(ByteArrayContent)，
+    /// 它必须带 Content-Length 且不是 chunked。
+    /// </summary>
+    [Theory]
+    [InlineData(TransferAction.PAUSE)]
+    [InlineData(TransferAction.RESUME)]
+    public void BuildJsonContent_UsesContentLength_NotChunked(TransferAction action)
+    {
+        var content = PipelinesTransferEngine.BuildJsonContent(
+            new ControlRequest { FileId = "abc-123", Action = action.ToString() });
+
+        Assert.NotNull(content.Headers.ContentLength);
+        Assert.True(content.Headers.ContentLength > 0);
+        Assert.False(content.Headers.TryGetValues("Transfer-Encoding", out _));
+        Assert.NotNull(content.Headers.ContentType);
+        Assert.Contains("application/json", content.Headers.ContentType!.ToString());
+    }
+
+    /// <summary>BuildJsonContent 序列化结果能被服务端大小写不敏感反序列化器正确读取（camelCase ↔ PascalCase）。</summary>
+    [Fact]
+    public async Task BuildJsonContent_SerializesCamelCase_DeserializesBack()
+    {
+        var content = PipelinesTransferEngine.BuildJsonContent(
+            new ControlRequest { FileId = "abc-123", Action = "PAUSE" });
+        var body = await content.ReadAsByteArrayAsync();
+        var json = Encoding.UTF8.GetString(body);
+        Assert.Contains("\"fileId\"", json);
+        Assert.Contains("\"action\"", json);
+
+        var ctl = JsonSerializer.Deserialize<ControlRequest>(body, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        });
+        Assert.NotNull(ctl);
+        Assert.Equal("abc-123", ctl!.FileId);
+        Assert.Equal("PAUSE", ctl.Action);
+    }
+
     private readonly DeviceNode _peer = new()
     {
         IpAddress = IPAddress.Loopback,

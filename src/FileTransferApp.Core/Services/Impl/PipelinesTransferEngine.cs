@@ -2,9 +2,12 @@ using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
+using FileTransferApp.Core.Diagnostics;
 using FileTransferApp.Core.Messaging;
 using FileTransferApp.Core.Models;
 using FileTransferApp.Core.Protocols;
@@ -32,11 +35,16 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     /// <summary>逐任务进度推送节流：上次推送的时间戳 (Environment.TickCount64, ms)</summary>
     private readonly ConcurrentDictionary<string, long> _lastProgressTickMs = new();
+    /// <summary>每个任务最近一次已发布进度对应的字节数，用于"百分比步进"强制推送中间帧。</summary>
+    private readonly ConcurrentDictionary<string, long> _lastPublishedBytes = new();
     /// <summary>逐任务发送续传重入锁：本地点击"恢复"与对端控制 RESUME 可能并发触发同一条续传，需去重</summary>
     private readonly ConcurrentDictionary<string, byte> _resuming = new();
     /// <summary>大文件（数百 MB）按 64KB 切片会有上万条进度消息，
     /// 全量 Post 到 UI 线程会造成明显卡顿，限制到 ~10Hz/任务。</summary>
     private const int ProgressPublishIntervalMs = 100;
+    /// <summary>进度步进阈值：累计推进 ≥ 此比例时即使未到时间限频也强制推送一帧，
+    /// 保证局域网快传不会只剩 0%→100% 两帧，UI 能看到阶梯式进度。</summary>
+    private const double ProgressStepRatio = 0.05;
 
     public PipelinesTransferEngine(
         IStorageService storage,
@@ -289,6 +297,22 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         return Convert.ToHexString(h).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// 手动序列化 JSON 为 ByteArrayContent：HttpClient 会据此自动设置 Content-Length。
+    /// 不要用 PostAsJsonAsync —— 它在 .NET 上以 Transfer-Encoding: chunked 发送
+    /// （无 Content-Length 头），简易 HTTP 服务器只支持 Content-Length，会把 body 读空 → 400。
+    /// </summary>
+    internal static ByteArrayContent BuildJsonContent(object obj)
+    {
+        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(obj, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        });
+        var content = new ByteArrayContent(jsonBytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        return content;
+    }
+
     // ===================== 控制命令 =====================
 
     public Task PauseAsync(string fileId)
@@ -379,7 +403,10 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             };
             try
             {
-                var resp = await _http.PostAsJsonAsync(baseUri + ProtocolConstants.PathPrepare, prepareReq, default)
+                // PostAsJsonAsync 会以 chunked 发送（无 Content-Length），简易服务器读不到 body → 400；
+                // 与初次发送一致，改用 ByteArrayContent 自动携带 Content-Length。
+                using var content = BuildJsonContent(prepareReq);
+                var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, default)
                     .ConfigureAwait(false);
                 var prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
                 if (prep is null || !prep.Accepted) { TryTransition(task, TransferState.Cancelled); return; }
@@ -471,6 +498,10 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         }
 
         var fileName = savePath ?? prepare.FileName;
+        // 保护：发送端在本端未完成时重发同名文件（携带新 FileId），旧任务仍持有 .tmp 写入流句柄，
+        // 若直接 OpenWriteStreamAsync 会抛 IO_SharingViolation → /prepare 500。
+        // 此处先将同名且未完成的接收任务取消并释放流，其语义由新任务取代。
+        CleanupStaleReceiveTasksByName(fileName);
         var (stream, finalPath) = await _storage.OpenWriteStreamAsync(fileName, prepare.FileSize).ConfigureAwait(false);
         _receiveStreams[prepare.FileId] = stream;
 
@@ -535,12 +566,19 @@ public sealed class PipelinesTransferEngine : ITransferEngine
 
     public Task ApplyControlAsync(string fileId, TransferAction action)
     {
-        if (!_tasks.TryGetValue(fileId, out var task)) return Task.CompletedTask;
+        if (!_tasks.TryGetValue(fileId, out var task))
+        {
+            FtaTrace.Warn("FTA.CTRL", $"<- {action} {fileId}: task not found (server-side)");
+            return Task.CompletedTask;
+        }
+        FtaTrace.Info("FTA.CTRL", $"<- {action} {fileId} state={task.State} dir={task.Direction}");
         switch (action)
         {
             case TransferAction.PAUSE:
                 if (task.State == TransferState.Transferring)
                     SetState(task, TransferState.Transferring, TransferState.Paused);
+                else
+                    FtaTrace.Warn("FTA.CTRL", $"<- PAUSE {fileId} skipped (state={task.State})");
                 break;
             case TransferAction.RESUME:
                 // 发送方向：对端恢复 = 重启本端续传（重新握手 + 推送缺失切片）。
@@ -716,12 +754,19 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     private void PublishProgress(TransferTaskInfo task, SpeedCalculator speed)
     {
         // 限频推送：避免大文件（上万切片）向 UI 线程注入海量消息导致卡顿。
-        // 最后一帧（BytesTransferred >= TotalBytes）必须推，保证进度收尾准确。
+        // 但纯时间限频在局域网快传（< 100ms 完成）时会吞掉全部中间帧，UI 只见 0%→100%。
+        // 因此叠加"百分比步进"条件：自上次推送推进 ≥ ProgressStepRatio 时必定发一帧。
+        // 最后一帧（BytesTransferred >= TotalBytes）也必须推，保证进度收尾准确。
         var now = Environment.TickCount64;
         var last = _lastProgressTickMs.TryGetValue(task.FileId, out var v) ? v : long.MinValue;
-        if (now - last < ProgressPublishIntervalMs && task.BytesTransferred < task.TotalBytes)
+        var elapsedOk = now - last >= ProgressPublishIntervalMs;
+        var lastBytes = _lastPublishedBytes.TryGetValue(task.FileId, out var lb) ? lb : 0;
+        var stepBytes = task.TotalBytes > 0 ? Math.Max(1L, (long)(task.TotalBytes * ProgressStepRatio)) : long.MaxValue;
+        var stepOk = task.BytesTransferred - lastBytes >= stepBytes && task.BytesTransferred > 0;
+        if (!elapsedOk && !stepOk && !(task.BytesTransferred >= task.TotalBytes))
             return;
         _lastProgressTickMs[task.FileId] = now;
+        _lastPublishedBytes[task.FileId] = task.BytesTransferred;
 
         _messenger.Send(new TransferProgressMessage(
             task.FileId, task.BytesTransferred, task.TotalBytes, speed.GetSpeedBytesPerSecond()));
@@ -736,13 +781,50 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     }
 
     /// <summary>
+    /// 注册新接收任务前清理同名残留任务：发送端在本端未完成时重发同名文件（新 FileId），
+    /// 旧任务仍持有 .tmp 写入流句柄，会让新的 OpenWriteStreamAsync 抛 IO_SharingViolation。
+    /// 仅清理"未完成"（非终态）的任务：已完成/失败/取消的任务已释放流（FinalizeWriteAsync
+    /// 将 .tmp 重命名为最终文件或 CancelWriteAsync 已删除），无需干涉，应继续展示在 UI。
+    /// </summary>
+    private void CleanupStaleReceiveTasksByName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return;
+        var stale = _tasks.Values
+            .Where(t => t.Direction == TransferDirection.Receive &&
+                        string.Equals(t.FileName, fileName, StringComparison.OrdinalIgnoreCase) &&
+                        !TransferStateMachine.IsTerminal(t.State))
+            .ToList();
+        foreach (var task in stale)
+        {
+            FtaTrace.Info("FTA.RECV", $"cleanup stale receive task '{fileName}' fileId={task.FileId} state={task.State}");
+            CloseReceiveStream(task.FileId);
+
+            try { task.PauseCts?.Cancel(); } catch { /* ignore */ }
+            SetState(task, task.State, TransferState.Cancelled);
+            if (task.LocalPath is not null)
+            {
+                try { _storage.CancelWriteAsync(task.LocalPath).GetAwaiter().GetResult(); }
+                catch { /* ignore */ }
+            }
+
+            _speeds.TryRemove(task.FileId, out _);
+            _tasks.TryRemove(task.FileId, out _);
+            _messenger.Send(new TransferTaskRemovedMessage(task.FileId));
+        }
+    }
+
+    /// <summary>
     /// 向对端发送控制命令（/control）：暂停/恢复/取消都需同步给对端，否则两端状态失同步。
     /// /control 端点在接收端早已实现（ApplyControlAsync），却从未被发送侧调用。
     /// fire-and-forget + 全程吞异常：对端离线/超时静默，绝不影响本端状态机。
     /// </summary>
     private void NotifyPeerControlAsync(TransferTaskInfo task, TransferAction action)
     {
-        if (task.Peer?.IpAddress is null) return;
+        if (task.Peer?.IpAddress is null)
+        {
+            FtaTrace.Warn("FTA.CTRL", $"skip->{action} {task.FileId}: peer IP is null");
+            return;
+        }
         try
         {
             // 接收方向：Peer 来自 BuildPeer（TCP 源端口，临时端口），但目标设备的传输服务固定监听
@@ -752,16 +834,27 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                 : task.Peer.Port;
             var target = $"http://{task.Peer.IpAddress}:{port}{ProtocolConstants.PathControl}";
             var cmd = new ControlRequest { FileId = task.FileId, Action = action.ToString() };
+            FtaTrace.Info("FTA.CTRL", $"-> {action} {task.FileId} ({task.Direction}) {target}");
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    using var resp = await _http.PostAsJsonAsync(target, cmd).ConfigureAwait(false);
+                    // 同上：PostAsJsonAsync 以 chunked 发送、服务器读不到 body → 400，
+                    // 改用 ByteArrayContent 携带 Content-Length。
+                    using var content = BuildJsonContent(cmd);
+                    using var resp = await _http.PostAsync(target, content).ConfigureAwait(false);
                     resp.EnsureSuccessStatusCode();
+                    FtaTrace.Info("FTA.CTRL", $"-> {action} {task.FileId} OK");
                 }
-                catch { /* best-effort：对端可能已离线 */ }
+                catch (Exception ex)
+                {
+                    FtaTrace.Warn("FTA.CTRL", $"-> {action} {task.FileId} FAIL: {ex.GetType().Name}: {ex.Message}");
+                }
             });
         }
-        catch { /* ignore */ }
+        catch (Exception ex)
+        {
+            FtaTrace.Warn("FTA.CTRL", $"-> {action} {task.FileId} setup FAIL: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }

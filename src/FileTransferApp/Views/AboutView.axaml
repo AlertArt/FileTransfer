@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:svc="using:FileTransferApp.Services"
+             xmlns:vm="using:FileTransferApp.ViewModels"
+             x:DataType="vm:MainViewModel"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="560"
+             x:Class="FileTransferApp.Views.AboutView">
+
+    <DockPanel LastChildFill="True">
+
+        <!-- 顶部：应用标识 -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="14" Margin="0,0,0,16">
+            <Border Background="{DynamicResource Brush.BrandGradient}"
+                    CornerRadius="16"
+                    Padding="16,12"
+                    Width="64" Height="64"
+                    VerticalAlignment="Center">
+                <TextBlock Text="🚀"
+                           FontSize="34"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+            <StackPanel VerticalAlignment="Center" Spacing="4">
+                <TextBlock Text="{svc:Localize Key=AppTitle}"
+                           Classes="Title"
+                           FontSize="20" />
+                <TextBlock x:Name="VersionText"
+                           Classes="Muted"
+                           FontSize="12" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- 描述 -->
+        <ScrollViewer>
+            <StackPanel Spacing="14">
+
+                <!-- 本机信息（微信风格：技术细节集中在其他页面，主界面保持干净） -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{svc:Localize Key=About.SelfInfoTitle}"
+                               Classes="Title"
+                               FontSize="15" />
+                    <Border Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1"
+                            CornerRadius="{DynamicResource Radius.Lg}"
+                            Padding="12,8">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Text="{svc:Localize Key=About.DeviceName}"
+                                           Classes="Muted"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelfName}"
+                                           Classes="Body"
+                                           HorizontalAlignment="Right"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Text="{svc:Localize Key=About.DeviceType}"
+                                           Classes="Muted"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelfTypeText}"
+                                           Classes="Body"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Text="{svc:Localize Key=About.Port}"
+                                           Classes="Muted"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelfPort}"
+                                           Classes="Body"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Text="{svc:Localize Key=About.IpAddress}"
+                                           Classes="Muted"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding IpText}"
+                                           Classes="Body"
+                                           HorizontalAlignment="Right"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Right" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <TextBlock Text="{svc:Localize Key=About.Description}"
+                           Classes="Body"
+                           TextWrapping="Wrap"
+                           LineHeight="22" />
+
+                <TextBlock Text="{svc:Localize Key=About.FeaturesTitle}"
+                           Classes="Title"
+                           FontSize="15" />
+                <TextBlock Text="{svc:Localize Key=About.Features}"
+                           Classes="Body"
+                           TextWrapping="Wrap"
+                           LineHeight="22" />
+
+                <TextBlock Text="{svc:Localize Key=About.Technology}"
+                           Classes="Muted"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           LineHeight="18" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

@@ -35,6 +35,7 @@ public static class ServiceConfiguration
 
         // 根视图模型
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton<LogsViewModel>();
 
         return services;
     }

@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:FileTransferApp.ViewModels"
+             xmlns:svc="using:FileTransferApp.Services"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="560"
+             x:Class="FileTransferApp.Views.LogsView"
+             x:DataType="vm:LogsViewModel">
+
+    <DockPanel>
+
+        <!-- 头：文件路径 + 操作按钮 -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8"
+              Margin="0,0,0,10">
+            <SelectableTextBlock Grid.Column="0"
+                                 Text="{Binding SourceInfo}"
+                                 Classes="Muted"
+                                 FontSize="11"
+                                 TextWrapping="Wrap"
+                                 VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       x:Name="CopyHint"
+                       Text="{svc:Localize Key=LogsCopied}"
+                       Classes="Muted"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       IsVisible="False" />
+            <Button Grid.Column="2"
+                    Classes="Icon"
+                    Content="📋"
+                    ToolTip.Tip="{svc:Localize Key=LogsCopy}"
+                    Click="OnCopyClick"
+                    IsEnabled="{Binding HasLogs}" />
+            <Button Grid.Column="3"
+                    Classes="Icon"
+                    Content="⟳"
+                    ToolTip.Tip="{svc:Localize Key=LogsRefresh}"
+                    Command="{Binding RefreshCommand}" />
+        </Grid>
+
+        <!-- 日志正文 -->
+        <Border Background="{DynamicResource Brush.SurfaceAlt}"
+                CornerRadius="{DynamicResource Radius.Md}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                Padding="10">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <SelectableTextBlock Text="{Binding LogText}"
+                                     FontFamily="Consolas, Cascadia Mono, Courier New, monospace"
+                                     FontSize="12"
+                                     LineHeight="17"
+                                     TextWrapping="Wrap"
+                                     AutomationProperties.Name="{svc:Localize Key=Logs}" />
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

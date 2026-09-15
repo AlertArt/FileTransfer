@@ -22,6 +22,12 @@ public partial class DeviceListViewModel : ObservableObject,
 
     public ObservableCollection<DeviceNode> Devices { get; } = new();
 
+    /// <summary>设备列表是否为空（供 XAML 空态提示切换）。</summary>
+    public bool HasDevices => Devices.Count > 0;
+
+    /// <summary>设备列表是否为空（正向属性，供 XAML 空态提示切换）。</summary>
+    public bool IsEmpty => Devices.Count == 0;
+
     [ObservableProperty] public partial DeviceNode? SelectedDevice { get; set; }
     [ObservableProperty] public partial string ManualIp { get; set; } = string.Empty;
     /// <summary>手动直连端口：应该是对方的【传输端口】(默认 53318 = ProtocolConstants.TransferPort)，
@@ -34,6 +40,7 @@ public partial class DeviceListViewModel : ObservableObject,
         _messenger = messenger;
         _discovery = discovery;
         foreach (var d in _discovery.Devices) Devices.Add(d);
+        Devices.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(HasDevices)); OnPropertyChanged(nameof(IsEmpty)); };
         _messenger.RegisterAll(this);
     }
 

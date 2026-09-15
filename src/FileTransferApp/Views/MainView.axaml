@@ -45,10 +45,6 @@
         <Style Selector="Grid.compact > Border.BottomBar">
             <Setter Property="Padding" Value="12,8" />
         </Style>
-        <!-- 紧凑(竖屏手机)：底栏收紧主题/语言下拉宽度，标签已由 IsVisible 隐藏 -->
-        <Style Selector="Grid.compact ComboBox">
-            <Setter Property="Width" Value="96" />
-        </Style>
         <Style Selector="Grid.compact Border.TransferCard">
             <Setter Property="Padding" Value="10,8" />
         </Style>
@@ -73,9 +69,12 @@
 
 
     <!-- 根背景：现代 App 惯用的「浅灰底」，承载白色卡片形成层次感 -->
+    <!-- AutoSafeAreaPadding：Android/iOS 沉浸式状态栏下，自动为根布局补安全区内边距，
+         避免顶/底部控件与系统状态栏/手势条重叠（桌面窗口无 insets，不受影响） -->
     <Grid RowDefinitions="Auto,*,Auto"
           x:Name="RootGrid"
           Background="{DynamicResource Brush.SurfaceAlt}"
+          TopLevel.AutoSafeAreaPadding="True"
           Classes.compact="{Binding IsCompact}"
           Classes.short="{Binding IsShort}">
 
@@ -102,16 +101,6 @@
                                Classes="Title"
                                FontSize="16"
                                Foreground="{DynamicResource Brush.TextOnBrand}" />
-                    <TextBlock Text="{Binding SelfInfo}"
-                               Classes="Subtitle"
-                               Foreground="#FFFFFFCC"
-                               IsVisible="{Binding !IsCompact}" />
-                    <!-- 紧凑模式（手机竖屏）：只显示本机 LAN IP，UDP 不可达时用户需把 IP 告知对端手动直连 -->
-                    <TextBlock Text="{Binding IpText}"
-                               Classes="Subtitle"
-                               Foreground="#FFFFFFCC"
-                               TextTrimming="CharacterEllipsis"
-                               IsVisible="{Binding IsCompact}" />
                 </StackPanel>
                 <!-- 主操作：选择文件（标准模式：完整文字按钮） -->
                 <Button Grid.Column="2" Grid.RowSpan="2"
@@ -200,10 +189,25 @@
                                 BorderBrush="{DynamicResource Brush.Border}"
                                 BorderThickness="1"
                                 Margin="0,10,0,0">
-                            <ListBox ItemsSource="{Binding Devices.Devices}"
-                                     SelectedItem="{Binding Devices.SelectedDevice}"
-                                     Background="#00000000"
-                                     Padding="4">
+                            <Grid>
+                                <!-- 空态：简洁提示（微信风格，本机信息移至"关于"页） -->
+                                <StackPanel IsVisible="{Binding Devices.IsEmpty}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Spacing="10"
+                                            Margin="12,16">
+                                    <TextBlock Text="🔍"
+                                               FontSize="28"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="{svc:Localize Key=DeviceEmptyWaiting}"
+                                               Classes="Muted"
+                                               HorizontalAlignment="Center"
+                                               TextAlignment="Center" />
+                                </StackPanel>
+                                <ListBox ItemsSource="{Binding Devices.Devices}"
+                                         SelectedItem="{Binding Devices.SelectedDevice}"
+                                         Background="#00000000"
+                                         Padding="4">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate DataType="models:DeviceNode">
                                         <Grid ColumnDefinitions="Auto,*,Auto" Margin="2" VerticalAlignment="Center">
@@ -232,6 +236,7 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+                            </Grid>
                         </Border>
                     </DockPanel>
                 </Border>
@@ -254,8 +259,22 @@
                                        VerticalAlignment="Center" />
                         </DockPanel>
 
-                        <ScrollViewer>
-                            <ItemsControl ItemsSource="{Binding Transfers}">
+                        <!-- +++++ 传输列表内容区：空态提示 + 列表 +++++ -->
+                        <Grid>
+                            <StackPanel IsVisible="{Binding !HasTransfers}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="6"
+                                        Margin="12,20">
+                                <TextBlock Text="📄"
+                                           FontSize="28"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="{svc:Localize Key=TransferEmptyHint}"
+                                           Classes="Body"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+                            <ScrollViewer>
+                                <ItemsControl ItemsSource="{Binding Transfers}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Spacing="10" />
@@ -271,13 +290,13 @@
                                                 BorderThickness="1"
                                                 BoxShadow="{DynamicResource Shadow.Sm}"
                                                 DoubleTapped="TransferCard_DoubleTapped">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                                                   ColumnSpacing="10" RowSpacing="5">
 
                                                 <!-- [缩略图 / 文件头像] -->
                                                 <Border x:Name="ThumbArea"
                                                         Classes="ThumbArea"
-                                                        Grid.RowSpan="3"
+                                                        Grid.RowSpan="4"
                                                         CornerRadius="{DynamicResource Radius.Md}"
                                                         Background="{DynamicResource Brush.SurfaceAlt}"
                                                         ClipToBounds="True"
@@ -352,29 +371,37 @@
                                                                Foreground="{Binding State, Converter={StaticResource StatusToColor}}" />
                                                 </Grid>
 
-                                                <!-- [进度条：叠加 百分比(左) + 速度(右)]，不再单独占行 -->
-                                                <Grid Grid.Row="2" Grid.Column="1">
-                                                    <ProgressBar Minimum="0" Maximum="100"
-                                                                 Value="{Binding AnimatedProgress}" />
-                                                    <!-- 叠加层：进度条已加高到 16px，文字置于其上不遮挡渐变 -->
-                                                    <Grid IsHitTestVisible="False">
-                                                        <TextBlock HorizontalAlignment="Left"
-                                                                   Margin="8,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   Foreground="{DynamicResource Brush.TextPrimary}"
-                                                                   FontWeight="SemiBold" FontSize="11"
-                                                                   Text="{Binding AnimatedProgress, StringFormat='{}{0:0.#} %'}" />
-                                                        <TextBlock HorizontalAlignment="Right"
-                                                                   Margin="0,0,8,0"
-                                                                   VerticalAlignment="Center"
-                                                                   Foreground="{DynamicResource Brush.TextPrimary}"
-                                                                   FontSize="11"
-                                                                   Text="{Binding SpeedText}" />
-                                                    </Grid>
+                                                <!-- [进度条] -->
+                                                <ProgressBar Grid.Row="2" Grid.Column="1"
+                                                             Minimum="0" Maximum="100"
+                                                             Value="{Binding AnimatedProgress}"
+                                                             IsVisible="{Binding !ShowWaitHint}" />
+
+                                                <!-- [进度信息行：百分比(左) + 速度(右)]，置于进度条下方，不再压叠在条上 -->
+                                                <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto,*"
+                                                      IsVisible="{Binding !ShowWaitHint}">
+                                                    <TextBlock Grid.Column="0"
+                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                               FontWeight="SemiBold" FontSize="11"
+                                                               Text="{Binding AnimatedProgress, StringFormat='{}{0:0.#} %'}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               HorizontalAlignment="Right"
+                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                               FontSize="11"
+                                                               Text="{Binding SpeedText}" />
                                                 </Grid>
 
-                                                <!-- [错误提示行]：失败/断开/取消时显示错误原因（两套主题令牌） -->
-                                                <Border Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                                <!-- [等待审批/准备中提示行]：进度条与信息行后半段被此提示行整行替换 -->
+                                                <TextBlock Grid.Row="2" Grid.RowSpan="2" Grid.Column="1"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Classes="Muted"
+                                                           FontWeight="SemiBold" FontSize="11"
+                                                           Text="{Binding StateText}"
+                                                           IsVisible="{Binding ShowWaitHint}" />
+
+                                                <!-- [错误提示行]：失败/断开/取消时显示错误原因（两套主题令牌）；仅占内容列，避免压到右侧按钮 -->
+                                                <Border Grid.Row="4" Grid.Column="1"
                                                         Background="{DynamicResource Brush.ErrorBg}"
                                                         BorderBrush="{DynamicResource Brush.ErrorBorder}"
                                                         BorderThickness="1"
@@ -388,7 +415,7 @@
                                                 </Border>
 
                                                 <!-- [操作按钮：暂停/恢复/取消/删除] -->
-                                                <StackPanel Grid.RowSpan="4" Grid.Column="2"
+                                                <StackPanel Grid.RowSpan="5" Grid.Column="2"
                                                             Orientation="Horizontal" Spacing="2"
                                                             VerticalAlignment="Center">
                                                     <Button Classes="Icon" Content="⏸"
@@ -417,19 +444,20 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
+                            </ScrollViewer>
+                        </Grid>
                     </DockPanel>
                 </Border>
             </Grid>
         </Grid>
 
-        <!-- +++++ 底栏：状态栏 +++++ -->
+        <!-- +++++ 底栏：状态（左）+ 齿轮入口（右），单行永不溢出 +++++ -->
         <Border Grid.Row="2"
                 Classes="BottomBar"
                 Background="{DynamicResource Brush.Surface}"
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="0,1,0,0">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <!-- 在线设备小圆点 -->
                     <Ellipse Width="8" Height="8"
@@ -437,9 +465,11 @@
                              VerticalAlignment="Center" />
                     <TextBlock Text="{svc:Localize Key=OnlineLabel, Args={Binding Devices.Devices.Count}}"
                                Classes="Subtitle" />
-                    <TextBlock Text="·" Foreground="{DynamicResource Brush.TextMuted}" />
+                    <TextBlock Text="·" Foreground="{DynamicResource Brush.TextMuted}"
+                               IsVisible="{Binding !IsCompact}" />
                     <TextBlock Text="{svc:Localize Key=TasksLabel, Args={Binding Transfers.Count}}"
-                               Classes="Subtitle" />
+                               Classes="Subtitle"
+                               IsVisible="{Binding !IsCompact}" />
                     <TextBlock Text="|"
                                Foreground="{DynamicResource Brush.TextMuted}"
                                IsVisible="{Binding !IsCompact}" />
@@ -449,23 +479,32 @@
                                VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <!-- 主题切换 -->
-                    <TextBlock Classes="Muted" VerticalAlignment="Center"
-                               Text="{svc:Localize Key=Theme}"
-                               IsVisible="{Binding !IsCompact}" />
-                    <ComboBox x:Name="ThemeCombo"
-                              Width="116"
-                              SelectedIndex="0"
-                              SelectionChanged="OnThemeChanged" />
-                    <TextBlock Classes="Muted" VerticalAlignment="Center"
-                               Text="{svc:Localize Key=Language}"
-                               IsVisible="{Binding !IsCompact}" />
-                    <!-- 语言切换下拉框 -->
-                    <ComboBox x:Name="LanguageCombo"
-                              Width="116"
-                              SelectedIndex="0"
-                              SelectionChanged="OnLanguageChanged" />
+                    <Button Classes="Icon" Content="⚙️"
+                            ToolTip.Tip="{svc:Localize Key=Settings}"
+                            Click="OnOpenSettingsClick" />
                 </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- +++++ 覆盖面板：日志查看 / 关于（置于布局最上层，配返回按钮） +++++ -->
+        <Border x:Name="OverlayPane"
+                Grid.RowSpan="3"
+                Background="{DynamicResource Brush.Surface}"
+                IsVisible="False">
+            <Grid RowDefinitions="Auto,*">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="14,12">
+                    <Button Classes="Icon" Content="←"
+                            ToolTip.Tip="{svc:Localize Key=Back}"
+                            Click="OnCloseOverlayClick" />
+                    <TextBlock x:Name="OverlayTitle"
+                               Grid.Column="1"
+                               Classes="Title"
+                               FontSize="17"
+                               VerticalAlignment="Center" />
+                </Grid>
+                <ContentControl x:Name="OverlayContent"
+                                Grid.Row="1"
+                                Margin="14,0,14,14" />
             </Grid>
         </Border>
     </Grid>

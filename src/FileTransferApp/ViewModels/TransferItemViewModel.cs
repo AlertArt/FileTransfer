@@ -56,6 +56,8 @@ public partial class TransferItemViewModel : ObservableObject,
     [ObservableProperty] public partial TransferState State { get; set; } = TransferState.Created;
     [ObservableProperty] public partial Bitmap? ThumbnailImage { get; set; }
     [ObservableProperty] public partial bool IsRunning { get; set; }
+    /// <summary>握手/等待审批阶段：进度区显示状态文字（如"等待接收"），避免用户盯着 0% 误以为卡死。</summary>
+    [ObservableProperty] public partial bool ShowWaitHint { get; set; }
     [ObservableProperty] public partial bool IsPaused { get; set; }
     [ObservableProperty] public partial bool IsTerminal { get; set; }
     /// <summary>非终态且非 Created：显示取消按钮（等待审批、传输中、暂停、断开都可取消）</summary>
@@ -297,6 +299,7 @@ public partial class TransferItemViewModel : ObservableObject,
     private void RefreshStateFlags(TransferState s)
     {
         IsRunning = s == TransferState.Transferring;
+        ShowWaitHint = s is TransferState.Preparing or TransferState.WaitingApproval;
         IsPaused = s == TransferState.Paused;
         IsTerminal = s is TransferState.Completed or TransferState.Failed or TransferState.Cancelled;
         // 非 Created 且非终态 → 可取消（等待审批、传输中、暂停、断开）

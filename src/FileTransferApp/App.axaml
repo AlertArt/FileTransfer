@@ -289,5 +289,9 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         </Style>
+        <Style Selector="TextBlock.Body">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        </Style>
     </Application.Styles>
 </Application>

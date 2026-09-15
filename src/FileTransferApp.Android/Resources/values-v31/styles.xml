@@ -17,5 +17,10 @@
   <style name="MyTheme.Main"
          parent ="MyTheme.NoActionBar">
     <item name="android:windowIsTranslucent">true</item>
+    <!-- 透明状态栏/导航栏：配合 EDGE_TO_EDGE_ENFORCED，让应用内容 (SurfaceAlt)
+         延伸至刘海/挖孔区域，消除横屏手机左侧白色状态栏条。
+         LIGHT_STATUS_BAR 保留（暗色图标在浅背景上可读）。 -->
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
   </style>
 </resources>

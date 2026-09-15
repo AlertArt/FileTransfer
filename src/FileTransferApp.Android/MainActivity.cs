@@ -1,5 +1,6 @@
 using System.IO;
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using AndroidX.Core.App;
@@ -26,6 +27,9 @@ public class MainActivity : AvaloniaMainActivity
     private const int StoragePermissionRequestCode = 1002;
     private static int _crashHandlerInstalled;
 
+    /// <summary>供 AndroidFilePickerService 惰性获取当前 Activity（DI 在 Application.OnCreate 中提前构建）。</summary>
+    internal static MainActivity? Current { get; private set; }
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         const string TAG = "FTA.BOOT";
@@ -33,10 +37,37 @@ public class MainActivity : AvaloniaMainActivity
         // 1. 尽早安装崩溃捕获器（在 DI 构建和 Service 启动之前，优先保证闪退也能留下证据）
         EnsureCrashLogger();
         global::Android.Util.Log.Info(TAG, "EnsureCrashLogger done");
+        // 1.5 挂 Trace 文件监听器：core 的 FTA.CTRL/FTA.HTTP 日志落到公共 files 目录，便于 adb pull 排查
+        AttachTraceFileListener();
+        // 1.6 把 crash.log / fta.trace.log 复制到公共 Download 目录，用户无需 adb 也能取证
+        CopyLogsToPublicDownloads();
+        Current = this;
 
         // DI 配置已移至 Application.OnCreate()（在 Avalonia App 创建之前执行）
         // 此处验证 DI 是否就绪
         global::Android.Util.Log.Info(TAG, $"ServiceLocator type={ServiceLocator.Services.GetType().Name}");
+
+        // 2.5 全屏沉浸模式（隐藏系统栏）：必须在 base.OnCreate 之前设置，
+        //     SetDecorFitsSystemWindows(false) 让 Avalonia 视图在 attach 前拿到完整 insets，
+        //     之后 HideSystemBars() 真正隐藏状态栏+导航栏（IMMERSIVE_STICKY，滑动边缘临时唤出自动隐藏）。
+        //     注意：仅 Hide 一次不够——窗口重新获焦（对话框关闭/返回前台）时系统栏会恢复，
+        //     因此 OnWindowFocusChanged(true) 会再次调用 HideSystemBars()（见类底部）。
+        if (Window is not null)
+        {
+            try
+            {
+                if (global::Android.OS.Build.VERSION.SdkInt < global::Android.OS.BuildVersionCodes.VanillaIceCream)
+                {
+                    AndroidX.Core.View.WindowCompat.SetDecorFitsSystemWindows(Window, false);
+                    global::Android.Util.Log.Info(TAG, "WindowCompat.SetDecorFitsSystemWindows(false) OK");
+                }
+                HideSystemBars();
+            }
+            catch (Exception ex)
+            {
+                global::Android.Util.Log.Warn(TAG, $"Edge-to-edge setup failed: {ex.Message}");
+            }
+        }
 
         // 2. Avalonia 初始化与 View 创建（DI 已在 Application.OnCreate 中配置完毕）
         try
@@ -83,22 +114,228 @@ public class MainActivity : AvaloniaMainActivity
         global::Android.Util.Log.Info(TAG, "MainActivity.OnCreate EXIT OK");
     }
 
-    /// <summary>注册跨平台核心服务 + Android 平台服务（保活 / 存储）</summary>
-    private void ConfigureServices()
+    /// <summary>
+    /// 窗口重新获焦：系统栏可能因临时唤出 / 对话框关闭 / 返回前台而恢复显示，
+    /// 重写此方法在每次获焦时重新隐藏（配合 BehaviorShowTransientBarsBySwipe 实现持久全屏）。
+    /// </summary>
+    public override void OnWindowFocusChanged(bool hasFocus)
     {
-        var services = new ServiceCollection();
-        // Android 平台服务：前台保活 + 应用私有目录存储
-        services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
-        services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
-        services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
-        services.AddFileTransferServices(GetDeviceName(), DeviceType.Android);
-        ServiceLocator.Services = services.BuildServiceProvider();
+        base.OnWindowFocusChanged(hasFocus);
+        if (hasFocus)
+        {
+            HideSystemBars();
+        }
     }
 
-    private static string GetDeviceName()
+    /// <summary>真正隐藏系统栏（状态栏+导航栏）：API30+ 用 InsetsController，API21-29 用传统 SystemUiVisibility flags。</summary>
+    private void HideSystemBars()
     {
-        try { return Build.Model ?? "Android Device"; }
-        catch { return "Android Device"; }
+        const string TAG = "FTA.FULLSCREEN";
+        if (Window is not { } window || Window.DecorView is not { } decor)
+        {
+            global::Android.Util.Log.Warn(TAG, "Window/DecorView not ready, skip");
+            return;
+        }
+
+        try
+        {
+            if (global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.R)
+            {
+                var controller = AndroidX.Core.View.WindowCompat.GetInsetsController(window, decor)!;
+                controller.SystemBarsBehavior = AndroidX.Core.View.WindowInsetsControllerCompat.BehaviorShowTransientBarsBySwipe;
+                controller.Hide(AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars());
+                controller.AppearanceLightStatusBars = true;
+                controller.AppearanceLightNavigationBars = true;
+                global::Android.Util.Log.Info(TAG, "HideSystemBars OK (InsetsController, API>=30)");
+            }
+            else
+            {
+#pragma warning disable CA1416 // 仅 API21-29 路径
+#pragma warning disable CA1422
+                decor.SystemUiFlags = global::Android.Views.SystemUiFlags.ImmersiveSticky |
+                    global::Android.Views.SystemUiFlags.Fullscreen |
+                    global::Android.Views.SystemUiFlags.HideNavigation |
+                    global::Android.Views.SystemUiFlags.LayoutStable |
+                    global::Android.Views.SystemUiFlags.LayoutFullscreen |
+                    global::Android.Views.SystemUiFlags.LayoutHideNavigation;
+#pragma warning restore CA1422
+#pragma warning restore CA1416
+                global::Android.Util.Log.Info(TAG, "HideSystemBars OK (SystemUiVisibility, API21-29)");
+            }
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn(TAG, $"HideSystemBars failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>注册跨平台核心服务 + Android 平台服务（保活 / 存储）</summary>
+    /// 注意：真实 DI 在 Application.OnCreate() 内联构建；此方法为遗留死代码，已移除防止误导。
+
+    // ==================== 原生文件选择器（SAF / ACTION_OPEN_DOCUMENT） ====================
+    // Avalonia 的 StorageProvider 在 Android 上可能拿不到 provider，导致发送时文件窗口打不开；
+    // 这里直接用系统文档选择器，并把选择的 content:// URI 复制到应用缓存获得真实本地路径。
+
+    private const int PickDocumentRequestCode = 2002;
+    private TaskCompletionSource<string[]>? _pickTcs;
+
+    internal Task<string[]> PickFilesNativeAsync()
+    {
+        _pickTcs = new TaskCompletionSource<string[]>();
+        var intent = new Intent(Intent.ActionOpenDocument)
+            .AddCategory(Intent.CategoryOpenable)
+            .SetType("*/*")
+            .PutExtra(Intent.ExtraAllowMultiple, true);
+        StartActivityForResult(intent, PickDocumentRequestCode);
+        return _pickTcs.Task;
+    }
+
+    protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+        if (requestCode != PickDocumentRequestCode) return;
+
+        var paths = new List<string>();
+        if (resultCode == Result.Ok && data != null)
+        {
+            var uris = new List<global::Android.Net.Uri>();
+            var single = data.Data;
+            if (single != null) uris.Add(single);
+            var clip = data.ClipData;
+            if (clip != null)
+            {
+                for (var i = 0; i < clip.ItemCount; i++)
+                {
+                    var u = clip.GetItemAt(i)?.Uri;
+                    if (u != null && !uris.Contains(u)) uris.Add(u);
+                }
+            }
+            foreach (var uri in uris)
+            {
+                var path = MaterializePickedUri(uri);
+                if (path != null)
+                {
+                    paths.Add(path);
+                    global::Android.Util.Log.Info("FTA.FILE", $"PICK-OK {uri} -> {path}");
+                }
+                else
+                {
+                    global::Android.Util.Log.Warn("FTA.FILE", $"PICK-FAIL materialize {uri}");
+                }
+            }
+        }
+        _pickTcs?.TrySetResult(paths.ToArray());
+    }
+
+    /// <summary>
+    /// 把 SAF content:// URI 内容复制到应用私有缓存，返回真实文件路径（传输引擎按路径读文件）。
+    /// 文件名必须保留原始名称（含扩展名）：传输文件名取自 Path.GetFileName(filePath)，
+    /// 若这里回退成 "file-时间戳" 会导致对端收到无扩展名、无法识别的文件。
+    /// </summary>
+    private string? MaterializePickedUri(global::Android.Net.Uri uri)
+    {
+        try
+        {
+            var display = QueryDisplayName(uri);
+            if (string.IsNullOrWhiteSpace(display))
+            {
+                display = GuessDisplayNameFromUri(uri);
+                global::Android.Util.Log.Warn("FTA.FILE", $"PICK-NAME query failed, fallback uri=\"{display ?? "null"}\" for {uri}");
+            }
+
+            var safe = SanitizePickedName(display ?? $"file-{DateTime.UtcNow.Ticks}");
+            if (string.IsNullOrWhiteSpace(safe)) safe = $"file-{DateTime.UtcNow.Ticks}";
+            global::Android.Util.Log.Info("FTA.FILE", $"PICK-NAME uri={uri} name=\"{safe}\"");
+
+            var dir = Path.Combine(CacheDir?.AbsolutePath ?? FilesDir?.AbsolutePath ?? "/data/local/tmp", "picked");
+            Directory.CreateDirectory(dir);
+            var dest = Path.Combine(dir, safe);
+            if (File.Exists(dest))
+                dest = Path.Combine(dir, $"{DateTime.UtcNow.Ticks}-{safe}");
+
+            using var input = ContentResolver?.OpenInputStream(uri)
+                              ?? throw new IOException("OpenInputStream returned null");
+            using var output = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None);
+            input.CopyTo(output);
+            return dest;
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.FILE", $"MaterializePickedUri FAIL {uri}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private string? QueryDisplayName(global::Android.Net.Uri uri)
+    {
+        try
+        {
+            using var cursor = ContentResolver?.Query(uri, null, null, null, null);
+            if (cursor is null || cursor.IsAfterLast) return null;
+            var idx = cursor.GetColumnIndex(global::Android.Provider.IOpenableColumns.DisplayName);
+            if (idx < 0) return null;
+            // cursor 初始位于 -1（first row 之前），必须先 MoveToFirst 才能读值，
+            // 否则 GetString 抛 NPE 被 catch 吞掉 → 永远回退到 doc-id 推断，
+            // 导致对端收到 image_1000004624 这类无扩展名文件、无法识别为图片。
+            if (!cursor.MoveToFirst()) return null;
+            return cursor.GetString(idx);
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.FILE", $"QueryDisplayName FAIL {uri}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 从 SAF URI 的文档 ID 推断文件名（含扩展名）。doc-id 形如
+    /// "primary:Download/photo.jpg" / "msf:100021" / "image:100034"，
+    /// 取最后一个 '/' 之后的段并解码。仅当 QueryDisplayName 拿不到名字时使用。
+    /// </summary>
+    private static string? GuessDisplayNameFromUri(global::Android.Net.Uri uri)
+    {
+        try
+        {
+            var last = uri.LastPathSegment;
+            if (string.IsNullOrWhiteSpace(last)) return null;
+            var decoded = global::Android.Net.Uri.Decode(last);
+            var slash = decoded!.LastIndexOf('/');
+            var name = slash >= 0 ? decoded.Substring(slash + 1) : decoded;
+            return string.IsNullOrWhiteSpace(name) ? null : name;
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.FILE", $"GuessDisplayNameFromUri FAIL {uri}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>文件名净化：保留扩展名，替换非法字符，超长时截断头部保留尾部（含扩展名），预防路径注入。</summary>
+    private static string? SanitizePickedName(string name)
+    {
+        try
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var sb = new System.Text.StringBuilder(name.Length);
+            foreach (var c in name)
+            {
+                sb.Append(invalid.Contains(c) || c == '/' || c == '\\' || c == ':' ? '_' : c);
+            }
+            while (sb.Length > 0 && sb[0] == '.') sb.Remove(0, 1); // 防隐藏文件/伪装目录
+            if (sb.Length > 120)
+            {
+                // 截掉头部，保留尾部（扩展名与大部分原名）
+                var keep = sb.ToString(sb.Length - 120, 120);
+                sb.Clear();
+                sb.Append(keep);
+            }
+            var s = sb.ToString().Trim();
+            return string.IsNullOrWhiteSpace(s) ? null : s;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Android 13 (API 33+) 起前台通知需运行时申请 POST_NOTIFICATIONS</summary>
@@ -138,7 +375,67 @@ public class MainActivity : AvaloniaMainActivity
         }
     }
 
+    // ==================== 日志导出到公共 Download（无需 adb 取证） ====================
+
+    /// <summary>
+    /// 把 crash.log / fta.trace.log 复制到 /sdcard/Download/fta_crash.log、fta_trace.log，
+    /// 用户用文件管理器或数据线即可取回，无需 adb。权限不足时静默失败（不影响启动）。
+    /// </summary>
+    private static void CopyLogsToPublicDownloads()
+    {
+        try
+        {
+            var ctx = global::Android.App.Application.Context;
+            var srcDir = ctx?.GetExternalFilesDir(null)?.AbsolutePath;
+            if (string.IsNullOrEmpty(srcDir) || !Directory.Exists(srcDir)) return;
+
+            var downloadDir = global::Android.OS.Environment.GetExternalStoragePublicDirectory(
+                global::Android.OS.Environment.DirectoryDownloads)?.AbsolutePath;
+            if (string.IsNullOrEmpty(downloadDir)) return;
+            try { Directory.CreateDirectory(downloadDir); } catch { return; }
+
+            var pairs = new[] { ("crash.log", "fta_crash.log"), ("fta.trace.log", "fta_trace.log") };
+            foreach (var (src, dest) in pairs)
+            {
+                var s = Path.Combine(srcDir, src);
+                if (File.Exists(s))
+                {
+                    File.Copy(s, Path.Combine(downloadDir, dest), overwrite: true);
+                    global::Android.Util.Log.Info("FTA.BOOT", $"log exported: {dest}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.BOOT", $"CopyLogsToPublicDownloads failed: {ex.Message}");
+        }
+    }
+
     // ==================== 崩溃捕获（遵循 1498720 经验：无 logcat 时优先落盘私有目录） ====================
+
+    /// <summary>FTA.CTRL / FTA.HTTP 等 Trace 日志写入公共目录 fta.trace.log（PackageExternalFiles），
+    /// 路径：/sdcard/Android/data/&lt;pkg&gt;/files/fta.trace.log，Release 包也能 adb pull。</summary>
+    private static void AttachTraceFileListener()
+    {
+        try
+        {
+            var ctx = global::Android.App.Application.Context;
+            var dir = ctx?.GetExternalFilesDir(null)?.AbsolutePath;
+            if (string.IsNullOrEmpty(dir))
+                dir = ctx?.FilesDir?.AbsolutePath;
+            if (string.IsNullOrEmpty(dir)) return;
+            var path = Path.Combine(dir, "fta.trace.log");
+            System.Diagnostics.Trace.AutoFlush = true;
+            System.Diagnostics.Trace.Listeners.Add(
+                new System.Diagnostics.TextWriterTraceListener(path));
+            global::Android.Util.Log.Info("FTA.BOOT", $"fta.trace.log -> {path}");
+        }
+        catch (Exception ex)
+        {
+            // 日志不可用不影响启动
+            global::Android.Util.Log.Warn("FTA.BOOT", $"AttachTraceFileListener failed: {ex.Message}");
+        }
+    }
 
     private void EnsureCrashLogger()
     {

@@ -27,9 +27,17 @@ namespace FileTransferApp.Android
                 var services = new ServiceCollection();
                 services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
                 services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
+                services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
                 var deviceName = "Android Device";
                 try { deviceName = Build.Model ?? "Android Device"; } catch { }
                 services.AddFileTransferServices(deviceName, Core.Models.DeviceType.Android);
+                // 覆盖共享注册：Android 文件选择/文件打开必须走原生实现。
+                // 【根因】此前这两项写在 MainActivity.ConfigureServices()，而真实 DI 在此方法内联构建，
+                // 导致 IFileOpenService 无注册（双击打开→GetRequiredService 抛异常→async void 外泄→闪退），
+                // 文件选择仍是共享的 AvaloniaFilePickerService（Android 上 StorageProvider 为 null → 窗口打不开）。
+                // AndroidFilePickerService 内部惰性取 MainActivity.Current，因此可在此处注册。
+                services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());
+                services.AddSingleton<ILogFileProvider>(_ => new AndroidLogFileProvider());
                 ServiceLocator.Services = services.BuildServiceProvider();
                 global::Android.Util.Log.Info("FTA.BOOT", "Application.OnCreate: ConfigureServices OK (before Avalonia App init)");
             }

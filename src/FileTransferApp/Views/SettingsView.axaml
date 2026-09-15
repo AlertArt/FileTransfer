@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:svc="using:FileTransferApp.Services"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="560"
+             x:Class="FileTransferApp.Views.SettingsView">
+
+    <UserControl.Styles>
+        <Style Selector="Button.SettingsRow">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.SettingsRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}" />
+        </Style>
+        <!-- 行分隔线：SettingsRow Border 子元素不含 Border 组件时用此样式模拟 -->
+    </UserControl.Styles>
+
+    <DockPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="20">
+
+                <!-- ===== 外观 ===== -->
+                <StackPanel>
+                    <TextBlock Text="{svc:Localize Key=Appearance}"
+                               Classes="Muted"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Margin="4,0,0,8" />
+
+                    <Border Classes="Card" Padding="14,8">
+                        <StackPanel Spacing="16">
+                            <!-- 主题 -->
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <TextBlock Text="{svc:Localize Key=Theme}"
+                                           VerticalAlignment="Center"
+                                           FontSize="14" />
+                                <ComboBox x:Name="ThemeCombo"
+                                          Grid.Column="1"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="120"
+                                          Width="160"
+                                          SelectedIndex="0"
+                                          SelectionChanged="OnThemeChanged" />
+                            </Grid>
+
+                            <!-- 语言 -->
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <TextBlock Text="{svc:Localize Key=Language}"
+                                           VerticalAlignment="Center"
+                                           FontSize="14" />
+                                <ComboBox x:Name="LanguageCombo"
+                                          Grid.Column="1"
+                                          HorizontalAlignment="Right"
+                                          MinWidth="120"
+                                          Width="160"
+                                          SelectedIndex="0"
+                                          SelectionChanged="OnLanguageChanged" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ===== 工具 ===== -->
+                <StackPanel>
+                    <TextBlock Text="{svc:Localize Key=Tools}"
+                               Classes="Muted"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Margin="4,0,0,8" />
+
+                    <Border Classes="Card" Padding="4,4">
+                        <StackPanel Spacing="2">
+                            <Button Classes="SettingsRow" Click="OnLogsClick">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                    <TextBlock Text="📄" FontSize="18" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{svc:Localize Key=LogsTitle}"
+                                               FontSize="14"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" />
+                                    <TextBlock Grid.Column="2" Text="›"
+                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                               FontSize="18"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+
+                            <Button Classes="SettingsRow" Click="OnAboutClick">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                    <TextBlock Text="ℹ️" FontSize="18" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{svc:Localize Key=About}"
+                                               FontSize="14"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" />
+                                    <TextBlock Grid.Column="2" Text="›"
+                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                               FontSize="18"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+    </DockPanel>
+</UserControl>

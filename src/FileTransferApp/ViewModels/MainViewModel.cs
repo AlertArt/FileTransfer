@@ -34,8 +34,15 @@ public partial class MainViewModel : ObservableObject,
     public DeviceListViewModel Devices { get; }
     public ObservableCollection<TransferItemViewModel> Transfers { get; } = new();
 
-    [ObservableProperty] public partial string SelfInfo { get; set; } = string.Empty;
-    /// <summary>紧凑模式自信息：仅显示本机 LAN IP（UDP 被 AP 隔离时，手机用户最需要把本机 IP 告知对端）</summary>
+    /// <summary>传输列表是否为空（供 XAML 空态提示切换）。</summary>
+    public bool HasTransfers => Transfers.Count > 0;
+
+    [ObservableProperty] public partial string SelfName { get; set; } = string.Empty;
+    /// <summary>本机设备类型（"PC"/"Android"等，供"关于"页展示）</summary>
+    [ObservableProperty] public partial string SelfTypeText { get; set; } = string.Empty;
+    /// <summary>本机传输端口（供"关于"页展示）</summary>
+    [ObservableProperty] public partial int SelfPort { get; set; }
+    /// <summary>本机 LAN IP（供"关于"页展示；多网卡时逗号分隔）</summary>
     [ObservableProperty] public partial string IpText { get; set; } = string.Empty;
     /// <summary>
     /// 响应式布局开关：窄屏(Android 竖屏/小窗口 < 600px)时为 true，
@@ -68,17 +75,19 @@ public partial class MainViewModel : ObservableObject,
         _filePicker = filePicker;
         _keepAlive = new TransferKeepAliveCoordinator(keepAlive);
         Devices = new DeviceListViewModel(messenger, discovery);
+        Transfers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTransfers));
 
         var self = _discovery.Self;
-        // 显示本机所有可达的 LAN IPv4（排除 127/169.254/多播段），
-        // 这样 Android 用户在 UDP 广播不可达（AP隔离/随机MAC）环境下可直接把 IP 告知对端手动输入。
+        // 记录本机 LAN IPv4（排除 127/169.254/多播段），供"关于"页展示；
+        // 用户在 UDP 广播不可达（AP隔离/随机MAC）环境下可把 IP 告知对端手动输入直连。
         var lanIps = GetLanIPv4Addresses();
-        _ipInfo = lanIps.Count > 0 ? $" · LAN IP: {string.Join(", ", lanIps)}" : "";
         _selfName = self.DeviceName;
         _selfType = self.DeviceType.ToString();
         _selfPort = self.Port;
+        SelfName = _selfName;
+        SelfTypeText = _selfType;
+        SelfPort = _selfPort;
         IpText = lanIps.Count > 0 ? string.Join(", ", lanIps) : _selfName;
-        RefreshSelfInfo();
         // 构造完毕时设备列表手动选中逻辑：订阅设备列表变化，当有新设备出现时自动选中
         Devices.Devices.CollectionChanged += (_, e) =>
         {
@@ -87,26 +96,11 @@ public partial class MainViewModel : ObservableObject,
         };
 
         _messenger.RegisterAll(this);
-
-        // 监听语言切换：刷新 SelfInfo
-        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
     }
 
-    private string _ipInfo = "";
     private string _selfName = "";
     private string _selfType = "";
     private int _selfPort;
-
-    private void RefreshSelfInfo()
-    {
-        SelfInfo = LocalizationService.Instance.Format("SelfInfo", _selfName, _selfType, _selfPort, _ipInfo);
-    }
-
-    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not ("Item[]" or "")) return;
-        Dispatcher.UIThread.Post(RefreshSelfInfo);
-    }
 
     public void Receive(TransferStatusChangedMessage message)
     {

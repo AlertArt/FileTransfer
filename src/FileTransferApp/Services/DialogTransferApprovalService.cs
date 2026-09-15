@@ -24,24 +24,9 @@ public sealed class DialogTransferApprovalService : ITransferApprovalService
 
     public async Task<(bool Accepted, string? SavePath)> RequestApprovalAsync(FileMetadata metadata, string peerName)
     {
-        // 移动端无 IClassicDesktopStyleApplicationLifetime，回退自动接受
-        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
-            || desktop.MainWindow is null)
-        {
-            return AutoApprove(metadata);
-        }
-
-        var owner = desktop.MainWindow;
-        bool accepted = false;
-
-        // 调用方位于 HTTP 服务器线程，必须切回 UI 线程构造并显示窗口
-        await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            accepted = await ShowApprovalDialog(owner, metadata, peerName);
-        });
-
-        if (!accepted) return (false, null);
-        return AutoApprove(metadata);
+        // 桌面端（Windows）默认自动接收：无需弹窗确认。
+        // 如需重新启用弹窗审批，可在设置页增加开关后在此按配置走 ShowApprovalDialog 分支。
+        return await Task.FromResult(AutoApprove(metadata));
     }
 
     private (bool, string?) AutoApprove(FileMetadata metadata)
