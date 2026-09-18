@@ -6,6 +6,7 @@ namespace FileTransferApp.Core.Models;
 
 /// <summary>
 /// 局域网设备节点。通过 UDP 心跳广播交换，含设备 ID/名称/类型/端口。
+/// 纯数据模型（DTO），不包含 UI 通知逻辑；绑定所需的可通知包装见 UI 层 DeviceNodeViewModel。
 /// </summary>
 public sealed class DeviceNode
 {

@@ -208,9 +208,9 @@
                                          SelectedItem="{Binding Devices.SelectedDevice}"
                                          Background="#00000000"
                                          Padding="4">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate DataType="models:DeviceNode">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="2" VerticalAlignment="Center">
+<ListBox.ItemTemplate>
+            <DataTemplate DataType="vm:DeviceNodeViewModel">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="2" VerticalAlignment="Center">
                                             <!-- 设备头像（Windows/Android 标识色） -->
                                             <Border Width="40" Height="40" CornerRadius="{DynamicResource Radius.Md}"
                                                     Background="{Binding DeviceType,
@@ -228,8 +228,24 @@
                                                            TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding EndPoint}" Classes="Muted" />
                                             </StackPanel>
+                                            <!-- 配对状态徽标：🔓=未配对（首次发送自动配对） / 🔒=已配对加密传输（点按解除配对） -->
+                                            <Button Grid.Column="2"
+                                                    Classes="Icon"
+                                                    Content="🔒"
+                                                    IsVisible="{Binding IsPaired}"
+                                                    ToolTip.Tip="{svc:Localize Key=Pair.Unpair}"
+                                                    Command="{Binding $parent[ListBox].DataContext.Devices.UnpairCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    VerticalAlignment="Center"
+                                                    Margin="2,0,0,0" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="🔓"
+                                                       IsVisible="{Binding !IsPaired}"
+                                                       ToolTip.Tip="{svc:Localize Key=Pair.Unpaired}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="6,0,0,0" />
                                             <!-- 选中指示：箭头 -->
-                                            <TextBlock Grid.Column="2" Text="›" FontSize="22"
+                                            <TextBlock Grid.Column="3" Text="›" FontSize="22"
                                                        Foreground="{DynamicResource Brush.TextMuted}"
                                                        VerticalAlignment="Center" Margin="4,0,0,0" />
                                         </Grid>

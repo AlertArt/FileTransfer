@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationId>com.CompanyName.FileTransferApp</ApplicationId>
     <ApplicationVersion>8</ApplicationVersion>
-    <ApplicationDisplayVersion>1.1.5</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>1.1.6</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
 

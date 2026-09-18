@@ -21,11 +21,32 @@ public static class ServiceConfiguration
         // 消息总线（单例弱引用）
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
 
+        // 持久化存储与安全层：设备身份 + 配对记录 + 配对/加密协调
+        services.AddSingleton<ISettingsStore, AppDataSettingsStore>();
+        services.AddSingleton<IDeviceIdentityStore, DeviceIdentityStore>();
+        services.AddSingleton<IPairingStore, PairingStore>();
+        services.AddSingleton<IPairingService>(sp => new PairingService(
+            sp.GetRequiredService<IDeviceIdentityStore>(),
+            sp.GetRequiredService<IPairingStore>(),
+            deviceName,
+            deviceType.ToString()));
+
         // 核心网络服务
         services.AddSingleton<IDiscoveryService>(sp =>
-            new UdpDiscoveryService(sp.GetRequiredService<IMessenger>(), deviceName, deviceType));
-        services.AddSingleton<ITransferEngine, PipelinesTransferEngine>();
-        services.AddSingleton<ITransferServer, TransferHttpServer>();
+            new UdpDiscoveryService(
+                sp.GetRequiredService<IMessenger>(),
+                deviceName,
+                deviceType,
+                sp.GetRequiredService<IDeviceIdentityStore>()));
+        services.AddSingleton<ITransferEngine>(sp => new PipelinesTransferEngine(
+            sp.GetRequiredService<IStorageService>(),
+            sp.GetRequiredService<IThumbnailService>(),
+            sp.GetRequiredService<ITransferApprovalService>(),
+            sp.GetRequiredService<IMessenger>(),
+            sp.GetRequiredService<IPairingService>()));
+        services.AddSingleton<ITransferServer>(sp => new TransferHttpServer(
+            sp.GetRequiredService<ITransferEngine>(),
+            sp.GetRequiredService<IPairingService>()));
 
         // UI 通用服务
         services.AddSingleton<IThumbnailService, AvaloniaThumbnailService>();

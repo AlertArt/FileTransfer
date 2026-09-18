@@ -30,12 +30,20 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
 
     public DeviceNode Self { get; }
 
-    public UdpDiscoveryService(IMessenger messenger, string deviceName, DeviceType deviceType)
+    public UdpDiscoveryService(
+        IMessenger messenger,
+        string deviceName,
+        DeviceType deviceType,
+        IDeviceIdentityStore? identityStore = null)
     {
         _messenger = messenger;
+        // v2：DeviceId 使用安装级持久身份（首次生成，之后跨进程复用），
+        // 保证配对记录与设备身份稳定。未注入身份存储时（如旧测试）回退随机 GUID。
+        var deviceId = identityStore?.GetOrCreateAsync().GetAwaiter().GetResult().DeviceId
+            ?? Guid.NewGuid().ToString("D");
         Self = new DeviceNode
         {
-            DeviceId = Guid.NewGuid().ToString("D"),
+            DeviceId = deviceId,
             DeviceName = deviceName,
             DeviceType = deviceType,
             Port = ProtocolConstants.TransferPort,

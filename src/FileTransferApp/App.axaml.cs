@@ -13,6 +13,10 @@ namespace FileTransferApp;
 
 public partial class App : Application
 {
+    /// <summary>平台绑定后的根视图（桌面=MainWindow，移动=MainView）。
+    /// 供弹窗类服务跨平台反查 TopLevel 窗口，无需平台专属引用。</summary>
+    internal static Avalonia.Visual? CurrentRootView { get; private set; }
+
     public override void Initialize()
     {
         // 中文回退字体：Android 端（及桌面端）缺少 CJK 字形时回退到内嵌的 Noto Sans CJK SC，
@@ -117,15 +121,22 @@ public partial class App : Application
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow { DataContext = vm };
+            var win = new MainWindow { DataContext = vm };
+            CurrentRootView = win;
+            desktop.MainWindow = win;
         }
         else if (Avalonia.Application.Current?.ApplicationLifetime is IActivityApplicationLifetime activityFactory)
         {
-            activityFactory.MainViewFactory = () => new MainView { DataContext = vm };
+            // 复用同一实例：不可在每次 MainViewFactory 调用时 new，否则弹窗服务反查 TopLevel 时拿到未附加视图
+            var view = new MainView { DataContext = vm };
+            CurrentRootView = view;
+            activityFactory.MainViewFactory = () => view;
         }
         else if (Avalonia.Application.Current?.ApplicationLifetime is ISingleViewApplicationLifetime singleView)
         {
-            singleView.MainView = new MainView { DataContext = vm };
+            var view = new MainView { DataContext = vm };
+            CurrentRootView = view;
+            singleView.MainView = view;
         }
         else
         {

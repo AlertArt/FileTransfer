@@ -67,14 +67,15 @@ public partial class MainViewModel : ObservableObject,
         ITransferEngine engine,
         IDiscoveryService discovery,
         IFilePickerService filePicker,
-        IPlatformKeepAliveService keepAlive)
+        IPlatformKeepAliveService keepAlive,
+        IPairingService pairing)
     {
         _messenger = messenger;
         _engine = engine;
         _discovery = discovery;
         _filePicker = filePicker;
         _keepAlive = new TransferKeepAliveCoordinator(keepAlive);
-        Devices = new DeviceListViewModel(messenger, discovery);
+        Devices = new DeviceListViewModel(messenger, discovery, pairing);
         Transfers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTransfers));
 
         var self = _discovery.Self;
@@ -159,7 +160,7 @@ public partial class MainViewModel : ObservableObject,
         // 之前用 "__pending__" 占位会因占位任务永不终结导致 Coordinator 误判 HasActiveTasks=true。
         foreach (var file in files)
         {
-            var task = await _engine.CreateSendTaskAsync(file, device);
+            var task = await _engine.CreateSendTaskAsync(file, device.Device);
             EnsureTransferItem(task.FileId);
             _ = _engine.StartSendAsync(task.FileId);
         }
@@ -184,7 +185,7 @@ public partial class MainViewModel : ObservableObject,
             if (newly is not null)
             {
                 // 强制覆盖 Port 为对方传输端口（用户输入的，因为心跳里对方 DeviceNode.Port 也带的是 TransferPort=53318）
-                if (newly.Port == 0) newly.Port = port;
+                if (newly.Port == 0) newly.Device.Port = port;
                 Devices.SelectedDevice = newly;
                 break;
             }
@@ -203,8 +204,8 @@ public partial class MainViewModel : ObservableObject,
                 ProtocolVersion = ProtocolConstants.ProtocolVersion,
                 LastSeenUtc = DateTime.UtcNow,
             };
-            Devices.Devices.Add(fallback);
-            Devices.SelectedDevice = fallback;
+            Devices.Devices.Add(new DeviceNodeViewModel(fallback));
+            Devices.SelectedDevice = Devices.Devices[^1];
         }
     }
 

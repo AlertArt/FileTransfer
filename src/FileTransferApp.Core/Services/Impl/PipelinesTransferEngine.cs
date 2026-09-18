@@ -11,6 +11,7 @@ using FileTransferApp.Core.Diagnostics;
 using FileTransferApp.Core.Messaging;
 using FileTransferApp.Core.Models;
 using FileTransferApp.Core.Protocols;
+using FileTransferApp.Core.Security;
 using FileTransferApp.Core.Services.Interfaces;
 
 namespace FileTransferApp.Core.Services.Impl;
@@ -28,6 +29,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     private readonly ITransferApprovalService _approval;
     private readonly IMessenger _messenger;
     private readonly HttpClient _http;
+    private readonly IPairingService? _pairing;
 
     private readonly ConcurrentDictionary<string, TransferTaskInfo> _tasks = new();
     private readonly ConcurrentDictionary<string, SpeedCalculator> _speeds = new();
@@ -50,12 +52,14 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         IStorageService storage,
         IThumbnailService thumbnail,
         ITransferApprovalService approval,
-        IMessenger messenger)
+        IMessenger messenger,
+        IPairingService? pairing = null)
     {
         _storage = storage;
         _thumbnail = thumbnail;
         _approval = approval;
         _messenger = messenger;
+        _pairing = pairing;
         // 禁用 Expect: 100-continue：默认行为会让 HttpClient 先发请求头等 100 Continue 再发 body，
         // 我们的简易 HTTP 服务器虽然已处理该头，但禁用后可直接发送 body，减少握手延迟与失败概率。
         var handler = new SocketsHttpHandler
@@ -149,20 +153,15 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         SetState(task, TransferState.Preparing, TransferState.WaitingApproval);
 
         PrepareResponse? prep;
+        PeerSecurityContext? secCtx;
         try
         {
+            secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
+
             // 不用 PostAsJsonAsync：它在内容较大时可能使用 Transfer-Encoding: chunked，
             // 我们的简易 HTTP 服务器只支持 Content-Length，chunked 会导致 body 读取为空 → 400。
             // 手动序列化为 byte[] 用 ByteArrayContent，HttpClient 会自动设置 Content-Length。
-            var jsonBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(prepareReq, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            });
-            using var content = new ByteArrayContent(jsonBytes);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
-            {
-                CharSet = "utf-8"
-            };
+            using var content = BuildSecureContent(prepareReq, secCtx);
             var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, ct)
                 .ConfigureAwait(false);
             // 不要直接 EnsureSuccessStatusCode：把非 2xx 响应体读出作为 ErrorMessage
@@ -190,6 +189,13 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             }
             prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>(cancellationToken: ct).ConfigureAwait(false);
         }
+        catch (PairingDeniedException ex)
+        {
+            // 对端用户明确拒绝了配对请求：中止发送（不降级明文）
+            SetError(task, $"对方拒绝了配对请求: {ex.Message}", "Err.PairingDenied", ex.Message);
+            SetState(task, task.State, TransferState.Cancelled);
+            return;
+        }
         catch (Exception ex)
         {
             // HttpRequestException/SocketException: 通常是 IP:port 不可达、目标未启动 HTTP 服务、防火墙拒绝
@@ -213,7 +219,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         SetState(task, TransferState.WaitingApproval, TransferState.Transferring);
         task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), task.PauseCts.Token).ConfigureAwait(false);
+        await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), secCtx, task.PauseCts.Token).ConfigureAwait(false);
 
         // 全部完成
         if (task.State == TransferState.Transferring)
@@ -223,7 +229,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         }
     }
 
-    private async Task SendBatchAsync(TransferTaskInfo task, string baseUri, int[] peerReceived, CancellationToken token)
+    private async Task SendBatchAsync(TransferTaskInfo task, string baseUri, int[] peerReceived, PeerSecurityContext? secCtx, CancellationToken token)
     {
         var speed = _speeds.GetOrAdd(task.FileId, _ => new SpeedCalculator());
         // 基线进度：对端已接收的切片
@@ -255,7 +261,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             var hash = ComputeChunkHash(buf, read);
             try
             {
-                await PostChunkAsync(task, baseUri, idx, hash, buf, read, token).ConfigureAwait(false);
+                await PostChunkAsync(task, baseUri, idx, hash, buf, read, secCtx, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { break; }
             catch (HttpRequestException hre) when (hre.StatusCode == HttpStatusCode.Conflict)
@@ -279,12 +285,16 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         }
     }
 
-    private async Task PostChunkAsync(TransferTaskInfo task, string baseUri, int idx, string hash, byte[] buf, int len, CancellationToken token)
+    private async Task PostChunkAsync(TransferTaskInfo task, string baseUri, int idx, string hash, byte[] buf, int len, PeerSecurityContext? secCtx, CancellationToken token)
     {
-        using var content = new ByteArrayContent(buf, 0, len);
+        using var content = BuildSecureContent(new ReadOnlyMemory<byte>(buf, 0, len).ToArray(), secCtx);
         content.Headers.Add(ProtocolConstants.HeaderFileId, task.FileId);
         content.Headers.Add(ProtocolConstants.HeaderChunkIndex, idx.ToString());
-        content.Headers.Add(ProtocolConstants.HeaderChunkHash, hash);
+        if (secCtx?.IsEncrypted != true)
+        {
+            // 明文（v1 兼容）路径保留 X-Chunk-Hash 供调试；v2 加密路径不再发送明文哈希（GCM 已保证完整性）
+            content.Headers.Add(ProtocolConstants.HeaderChunkHash, hash);
+        }
 
         using var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathChunk, content, token)
             .ConfigureAwait(false);
@@ -311,6 +321,43 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         var content = new ByteArrayContent(jsonBytes);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         return content;
+    }
+
+    /// <summary>
+    /// 构造 v2 加密请求体：AES-GCM 加密明文 JSON，并附加 X-Protocol / X-Device-Id 头。
+    /// sec 为 null（v1 明文路径）时退化为 BuildJsonContent。
+    /// </summary>
+    internal static HttpContent BuildSecureContent(object obj, PeerSecurityContext? sec)
+    {
+        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(obj, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        });
+        return BuildSecureContent(jsonBytes, sec);
+    }
+
+    /// <summary>对任意明文字节构造请求体；sec 为 null 或未加密时返回原始字节 content。</summary>
+    internal static HttpContent BuildSecureContent(byte[] plainBytes, PeerSecurityContext? sec)
+    {
+        if (sec?.IsEncrypted == true && sec.SharedKey is not null)
+        {
+            var frame = DeviceCrypto.Encrypt(sec.SharedKey, plainBytes);
+            var content = new ByteArrayContent(frame);
+            content.Headers.Add(ProtocolConstants.HeaderProtocolVersion, ProtocolConstants.ProtocolVersion.ToString());
+            content.Headers.Add(ProtocolConstants.HeaderDeviceId, sec.SelfDeviceId ?? string.Empty);
+            return content;
+        }
+        var plain = new ByteArrayContent(plainBytes);
+        plain.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        return plain;
+    }
+
+    /// <summary>获取任务对端的发送安全上下文。未注入配对服务 / 对端为 v1 明文 → null。</summary>
+    private async Task<PeerSecurityContext?> GetSendSecurityContextAsync(TransferTaskInfo task)
+    {
+        if (_pairing is null || task.Peer is null) return null;
+        var sec = await _pairing.GetContextForSendAsync(task.Peer).ConfigureAwait(false);
+        return sec.IsProtocolV2 && sec.IsPaired ? sec : null;
     }
 
     // ===================== 控制命令 =====================
@@ -405,18 +452,24 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             {
                 // PostAsJsonAsync 会以 chunked 发送（无 Content-Length），简易服务器读不到 body → 400；
                 // 与初次发送一致，改用 ByteArrayContent 自动携带 Content-Length。
-                using var content = BuildJsonContent(prepareReq);
+                var secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
+                using var content = BuildSecureContent(prepareReq, secCtx);
                 var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, default)
                     .ConfigureAwait(false);
                 var prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
                 if (prep is null || !prep.Accepted) { TryTransition(task, TransferState.Cancelled); return; }
-                await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), task.PauseCts.Token)
+                await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), secCtx, task.PauseCts.Token)
                     .ConfigureAwait(false);
                 if (task.State == TransferState.Transferring)
                 {
                     task.BytesTransferred = task.TotalBytes;
                     SetState(task, TransferState.Transferring, TransferState.Completed);
                 }
+            }
+            catch (PairingDeniedException ex)
+            {
+                SetError(task, $"对方拒绝了配对请求: {ex.Message}", "Err.PairingDenied", ex.Message);
+                TryTransition(task, TransferState.Cancelled);
             }
             catch (Exception ex)
             {
@@ -840,8 +893,9 @@ public sealed class PipelinesTransferEngine : ITransferEngine
                 try
                 {
                     // 同上：PostAsJsonAsync 以 chunked 发送、服务器读不到 body → 400，
-                    // 改用 ByteArrayContent 携带 Content-Length。
-                    using var content = BuildJsonContent(cmd);
+                    // 改用 ByteArrayContent 携带 Content-Length。v2 配对设备间同样加密。
+                    var secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
+                    using var content = BuildSecureContent(cmd, secCtx);
                     using var resp = await _http.PostAsync(target, content).ConfigureAwait(false);
                     resp.EnsureSuccessStatusCode();
                     FtaTrace.Info("FTA.CTRL", $"-> {action} {task.FileId} OK");

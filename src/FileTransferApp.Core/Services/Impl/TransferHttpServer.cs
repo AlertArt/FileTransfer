@@ -19,6 +19,7 @@ namespace FileTransferApp.Core.Services.Impl;
 public sealed class TransferHttpServer : ITransferServer
 {
     private readonly ITransferEngine _engine;
+    private readonly IPairingService? _pairing;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptTask;
@@ -26,7 +27,11 @@ public sealed class TransferHttpServer : ITransferServer
 
     public bool IsRunning => Volatile.Read(ref _running) == 1;
 
-    public TransferHttpServer(ITransferEngine engine) => _engine = engine;
+    public TransferHttpServer(ITransferEngine engine, IPairingService? pairing = null)
+    {
+        _engine = engine;
+        _pairing = pairing;
+    }
 
     public Task StartAsync(CancellationToken ct = default)
     {
@@ -85,24 +90,37 @@ public sealed class TransferHttpServer : ITransferServer
                 string responseJson;
                 int status;
 
-                switch (request.Path)
+                // /security/pair 永远明文：配对握手在建立共享密钥之前发生，只交换公钥。
+                // 其余三个传输端点：若携带 X-Device-Id 头（v2 加密请求）→ 必须先解密成功。
+                if (request.Path == ProtocolConstants.PathPair)
                 {
-                    case ProtocolConstants.PathPrepare:
-                        (status, responseJson) = await HandlePrepareAsync(request, peer).ConfigureAwait(false);
-                        break;
+                    (status, responseJson) = await HandlePairAsync(request, peer).ConfigureAwait(false);
+                }
+                else
+                {
+                    if (TryDecryptV2Request(ref request, ref peer, out status, out responseJson))
+                    {
+                        // 解密成功（或明文 v1 请求无需解密）继续分发；否则 TryDecryptV2Request 已写入 401
+                        switch (request.Path)
+                        {
+                            case ProtocolConstants.PathPrepare:
+                                (status, responseJson) = await HandlePrepareAsync(request, peer).ConfigureAwait(false);
+                                break;
 
-                    case ProtocolConstants.PathChunk:
-                        (status, responseJson) = await HandleChunkAsync(request).ConfigureAwait(false);
-                        break;
+                            case ProtocolConstants.PathChunk:
+                                (status, responseJson) = await HandleChunkAsync(request).ConfigureAwait(false);
+                                break;
 
-                    case ProtocolConstants.PathControl:
-                        (status, responseJson) = await HandleControlAsync(request).ConfigureAwait(false);
-                        break;
+                            case ProtocolConstants.PathControl:
+                                (status, responseJson) = await HandleControlAsync(request).ConfigureAwait(false);
+                                break;
 
-                    default:
-                        status = 404;
-                        responseJson = Serialize(new ErrorResponse { Error = "Not Found" });
-                        break;
+                            default:
+                                status = 404;
+                                responseJson = Serialize(new ErrorResponse { Error = "Not Found" });
+                                break;
+                        }
+                    }
                 }
 
                 FtaTrace.Info("FTA.HTTP", $"REQ {request.Method} {request.Path} -> {status} from {peer.IpAddress}:{peer.Port}");
@@ -136,7 +154,9 @@ public sealed class TransferHttpServer : ITransferServer
         }
     }
 
-    /// <summary>internal: 供单元测试驱动 404/409/400 错误路径</summary>
+    /// <summary>
+    /// internal: 供单元测试驱动 404/409/400 错误路径
+    /// </summary>
     internal async Task<(int status, string json)> HandleChunkAsync(HttpRequest req)
     {
         try
@@ -186,6 +206,73 @@ public sealed class TransferHttpServer : ITransferServer
             FtaTrace.Warn("FTA.HTTP", $"control handler EXCEPTION -> 500: {ex}");
             return (500, Serialize(new ErrorResponse { Error = ex.Message }));
         }
+    }
+
+    // ---- HTTP/1.1 解析与响应 ----
+
+    /// <summary>处理 /security/pair 配对请求（明文，见 HandleConnectionAsync 路由前置）</summary>
+    internal async Task<(int status, string json)> HandlePairAsync(HttpRequest req, DeviceNode peer)
+    {
+        try
+        {
+            if (_pairing is null)
+            {
+                // 未注入配对服务：v1 兼容包退化为不支持配对
+                return (404, Serialize(new ErrorResponse { Error = "Not Found" }));
+            }
+            var pair = Deserialize<PairRequest>(req.Body);
+            if (pair is null) return BadRequest("无效的配对请求");
+
+            var resp = await _pairing.HandlePairRequestAsync(pair, peer).ConfigureAwait(false);
+            return resp.Accepted
+                ? (200, Serialize(resp))
+                : (400, Serialize(resp));
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"[FTA.HTTP] /pair Exception: {ex}");
+            return (500, Serialize(new ErrorResponse { Error = ex.Message }));
+        }
+    }
+
+    /// <summary>
+    /// v2 加密请求解密前置处理。
+    /// - 请求带 X-Device-Id 头（v2 加密）：校验配对并解密 body，成功返回 true；未配对/解密失败写 401 返回 false。
+    /// - 无 X-Device-Id 头（v1 明文）：原样通过返回 true。
+    /// 解密成功时用配对记录中的设备名/ID 充实 peer（供审批 UI 展示真实设备名）。
+    /// </summary>
+    /// <summary>internal: 端点前置解密逻辑，供单元测试驱动 v2 加密路径（未配对 401 / 解密成功 / v1 明文直通）</summary>
+    internal bool TryDecryptV2Request(ref HttpRequest request, ref DeviceNode peer, out int status, out string responseJson)
+    {
+        if (!request.Headers.TryGetValue(ProtocolConstants.HeaderDeviceId, out var senderId))
+        {
+            status = 0;
+            responseJson = string.Empty;
+            return true; // v1 明文
+        }
+
+        if (_pairing is null)
+        {
+            status = 401;
+            responseJson = Serialize(new ErrorResponse { Error = "服务器未启用配对加密" });
+            return false;
+        }
+
+        var plain = _pairing.TryDecrypt(senderId, request.Body);
+        if (plain is null)
+        {
+            status = 401;
+            responseJson = Serialize(new ErrorResponse { Error = "设备未配对或密文无效" });
+            return false;
+        }
+
+        request = request with { Body = plain };
+        peer.DeviceId = senderId;
+        var displayName = _pairing.GetPeerDisplayName(senderId);
+        if (!string.IsNullOrEmpty(displayName)) peer.DeviceName = displayName;
+        status = 0;
+        responseJson = string.Empty;
+        return true;
     }
 
     // ---- HTTP/1.1 解析与响应 ----
