@@ -4,23 +4,30 @@
   <style name="MyTheme">
   </style>
 
-  <style name="MyTheme.NoActionBar" parent="@style/Theme.AppCompat.NoActionBar">
+  <style name="MyTheme.NoActionBar" parent="@style/Theme.AppCompat.DayNight.NoActionBar">
     <item name="android:windowActionBar">false</item>
-    <item name="android:windowBackground">@null</item>
+    <item name="android:windowBackground">@color/splash_background</item>
     <item name="android:windowNoTitle">true</item>
     <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     <item name="android:windowSplashScreenAnimatedIcon">@drawable/avalonia_anim</item>
     <item name="android:windowSplashScreenAnimationDuration">1000</item>
     <item name="postSplashScreenTheme">@style/MyTheme.Main</item>
 
-  </style>
-  <style name="MyTheme.Main"
-         parent ="MyTheme.NoActionBar">
-    <item name="android:windowIsTranslucent">true</item>
-    <!-- 透明状态栏/导航栏：配合 EDGE_TO_EDGE_ENFORCED，让应用内容 (SurfaceAlt)
-         延伸至刘海/挖孔区域，消除横屏手机左侧白色状态栏条。
-         LIGHT_STATUS_BAR 保留（暗色图标在浅背景上可读）。 -->
+    <!-- 与 values/styles.xml 同款：窗口绘制系统栏背景 + 双栏透明 + 状态栏白字。
+         【坑】此前这些只写在 MyTheme.Main，而代码未调用 installSplashScreen()，
+         postSplashScreenTheme 不会触发，App 全程使用本主题；windowBackground=@null
+         + 深色父主题 → 状态栏背后纯黑。现在直接写到实际生效的主题上。 -->
+    <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     <item name="android:statusBarColor">@android:color/transparent</item>
     <item name="android:navigationBarColor">@android:color/transparent</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowLightNavigationBar">true</item>
+    <!-- 内容铺进刘海/挖孔（API28+）：打孔屏顶部不留黑/白竖条 -->
+    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+  </style>
+
+  <style name="MyTheme.Main" parent="MyTheme.NoActionBar">
+    <!-- 仅作为 postSplashScreenTheme 的交换目标（若未来接入 installSplashScreen）。
+         继承 NoActionBar 的全部系统栏/背景配置，无需重复声明。 -->
   </style>
 </resources>

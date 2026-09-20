@@ -9,6 +9,7 @@
              mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="760"
              x:Class="FileTransferApp.Views.MainView"
              x:DataType="vm:MainViewModel"
+             TopLevel.AutoSafeAreaPadding="False"
              DragDrop.AllowDrop="True">
 
     <UserControl.Resources>
@@ -40,7 +41,12 @@
 
         <!-- 竖屏手机(compact, 宽<600)：单列布局，压缩 padding、缩小缩略图 -->
         <Style Selector="Grid.compact > Border.TopBar">
-            <Setter Property="Padding" Value="12,10,12,12" />
+            <!-- 顶栏纵向内边距收紧：紫色区高度 = 状态栏(safe.Top) + 内容(≈44)，避免顶栏"过宽/过高"。
+                 安全区仍由 MainView.axaml.cs 以 Margin 垫给内容列，保证紫色铺到屏幕最顶。 -->
+            <Setter Property="Padding" Value="12,6,12,6" />
+            <!-- 最小高度仅作无刘海/无状态栏时的兜底；有安全区时实际高度由 safe.Top+内容决定，
+                 故此处取 48 与"状态栏+内容"观感一致，不再把顶栏撑高。 -->
+            <Setter Property="MinHeight" Value="48" />
         </Style>
         <Style Selector="Grid.compact > Border.BottomBar">
             <Setter Property="Padding" Value="12,8" />
@@ -65,38 +71,55 @@
         <Style Selector="Grid.short Border.TransferCard">
             <Setter Property="Padding" Value="14,8" />
         </Style>
+
+        <!-- 空态压缩（compact/short 共用）：设备面板在高/宽受限时容器可能比
+             图标+文案更矮，若保持 FontSize24+Spacing10 会把内容顶出圆角框。
+             这里同时收小图标、收紧间距、缩小文案换行上限，确保空态始终
+             居中且完整待在圆角 Card 内部。 -->
+        <Style Selector="Grid.compact StackPanel.DeviceEmpty, Grid.short StackPanel.DeviceEmpty">
+            <Setter Property="Spacing" Value="6" />
+            <Setter Property="Margin" Value="6,12" />
+        </Style>
+        <Style Selector="Grid.compact StackPanel.DeviceEmpty TextBlock.Icon, Grid.short StackPanel.DeviceEmpty TextBlock.Icon">
+            <Setter Property="FontSize" Value="18" />
+        </Style>
+        <Style Selector="Grid.compact StackPanel.DeviceEmpty TextBlock.Hint, Grid.short StackPanel.DeviceEmpty TextBlock.Hint">
+            <Setter Property="MaxWidth" Value="180" />
+        </Style>
     </UserControl.Styles>
 
 
     <!-- 根背景：现代 App 惯用的「浅灰底」，承载白色卡片形成层次感 -->
-    <!-- AutoSafeAreaPadding：Android/iOS 沉浸式状态栏下，自动为根布局补安全区内边距，
-         避免顶/底部控件与系统状态栏/手势条重叠（桌面窗口无 insets，不受影响） -->
+    <!-- 安全区：AutoSafeAreaPadding 由 TopLevel 从**其内容(MainView)**读取并作用于内容 Padding，
+         所以标在 UserControl 根上（= MainView，即 TopLevel.Content）才有效，标在本 Grid 上无效。
+         关闭后安全区由 MainView.axaml.cs 监听 InsetsManager.SafeAreaChanged 手动垫到
+         TopBar/BottomBar 的内容层，让紫色 / 卡片背景真正铺满到屏幕边缘，且不再双重叠加。 -->
     <Grid RowDefinitions="Auto,*,Auto"
           x:Name="RootGrid"
           Background="{DynamicResource Brush.SurfaceAlt}"
-          TopLevel.AutoSafeAreaPadding="True"
           Classes.compact="{Binding IsCompact}"
           Classes.short="{Binding IsShort}">
 
-        <!-- +++++ 顶栏：品牌感 + 主操作 +++++ -->
+        <!-- +++++ 顶栏：品牌感 + 主操作（紧凑单行：Android 竖向全屏下高度≈48dp） +++++ -->
         <Border Classes="TopBar"
                 Background="{DynamicResource Brush.BrandGradient}"
-                CornerRadius="0,0,16,16"
-                BoxShadow="0 8 24 0 rgba(99,102,241,0.25)">
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" RowDefinitions="Auto,Auto" RowSpacing="4">
+                CornerRadius="0,0,14,14"
+                BoxShadow="0 3 10 0 #29FFFFFF">
+            <Grid x:Name="TopBarContentColumn"
+                  ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" RowDefinitions="Auto">
                 <!-- 品牌 Logo + 标题 -->
-                <Border Grid.RowSpan="2"
-                        Background="#FFFFFF33"
-                        CornerRadius="12"
-                        Padding="10,8"
-                        Width="44" Height="44"
+                <Border Grid.RowSpan="1"
+                        Background="#33FFFFFF"
+                        CornerRadius="9"
+                        Padding="6,4"
+                        Width="32" Height="32"
                         VerticalAlignment="Center">
                     <TextBlock Text="🚀"
-                               FontSize="24"
+                               FontSize="18"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                 </Border>
-                <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
+                <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="1" VerticalAlignment="Center">
                     <TextBlock Text="{svc:Localize Key=AppTitle}"
                                Classes="Title"
                                FontSize="16"
@@ -188,21 +211,31 @@
                         <Border CornerRadius="{DynamicResource Radius.Lg}"
                                 BorderBrush="{DynamicResource Brush.Border}"
                                 BorderThickness="1"
-                                Margin="0,10,0,0">
+                                Margin="0,10,0,0"
+                                ClipToBounds="True">
                             <Grid>
                                 <!-- 空态：简洁提示（微信风格，本机信息移至"关于"页） -->
-                                <StackPanel IsVisible="{Binding Devices.IsEmpty}"
+                                <!-- 理论上空态占满整个设备区垂直居中；ClipToBounds 在容器过矮时
+                                     防止内容画出圆角边框。紧凑模式会进一步缩小图标/间距(见样式)。 -->
+                                <!-- 空态改为横向：图标在左、提示词在右。
+                                     设备区在紧凑模式下可用高度有限，纵向堆叠会把提示词换行后裁切；
+                                     横向布局让文字贴着图标右侧换行，完整显示"等待附近设备连接"。 -->
+                                <StackPanel Classes="DeviceEmpty"
+                                            IsVisible="{Binding Devices.IsEmpty}"
+                                            Orientation="Horizontal"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            Spacing="10"
+                                            Spacing="8"
                                             Margin="12,16">
-                                    <TextBlock Text="🔍"
-                                               FontSize="28"
-                                               HorizontalAlignment="Center" />
-                                    <TextBlock Text="{svc:Localize Key=DeviceEmptyWaiting}"
-                                               Classes="Muted"
-                                               HorizontalAlignment="Center"
-                                               TextAlignment="Center" />
+                                    <TextBlock Classes="Icon"
+                                               Text="🔍"
+                                               FontSize="20"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Classes="Hint Muted"
+                                               Text="{svc:Localize Key=DeviceEmptyWaiting}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="220" />
                                 </StackPanel>
                                 <ListBox ItemsSource="{Binding Devices.Devices}"
                                          SelectedItem="{Binding Devices.SelectedDevice}"
@@ -473,7 +506,7 @@
                 Background="{DynamicResource Brush.Surface}"
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="0,1,0,0">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Grid x:Name="BottomBarContentColumn" ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <!-- 在线设备小圆点 -->
                     <Ellipse Width="8" Height="8"
@@ -508,7 +541,8 @@
                 Background="{DynamicResource Brush.Surface}"
                 IsVisible="False">
             <Grid RowDefinitions="Auto,*">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="14,12">
+                <Grid x:Name="OverlayHeaderGrid"
+                      ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="14,12">
                     <Button Classes="Icon" Content="←"
                             ToolTip.Tip="{svc:Localize Key=Back}"
                             Click="OnCloseOverlayClick" />

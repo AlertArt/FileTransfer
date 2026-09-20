@@ -14,11 +14,12 @@
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
 
     <!-- ====== 修复「解析包时出现问题」的 3 项关键配置 ====== -->
-    <!-- (1) ABI：同时输出 arm64-v8a (64位主流) + armeabi-v7a (32位兼容中低端/旧机)。
+    <!-- (1) ABI：同时输出 arm64-v8a (64位主流) + armeabi-v7a (32位兼容中低端/旧机) + x86_64 (模拟器/Intel)。
              仅 64 位会在 32 位设备上报 INSTALL_FAILED_NO_MATCHING_ABIS，表现为"解析包错误"。
-             使用 RuntimeIdentifiers（android-arm=armeabi-v7a, android-arm64=arm64-v8a），
-             .NET for Android 官方推荐属性，替代已废弃的 AndroidSupportedAbis。 -->
-    <RuntimeIdentifiers>android-arm;android-arm64</RuntimeIdentifiers>
+             使用 RuntimeIdentifiers（android-arm=armeabi-v7a, android-arm64=arm64-v8a, android-x64=x86_64），
+             .NET for Android 官方推荐属性，替代已废弃的 AndroidSupportedAbis。
+             一次 publish 即产出包含全部 ABI 的 fat APK，无需再手动合并 lib/。 -->
+    <RuntimeIdentifiers>android-arm;android-arm64;android-x64</RuntimeIdentifiers>
 
     <!-- (2) 签名方案：V1 (JAR签名，Android 7- 必需) + V2 (整包签名，Android 7+ 必需)
              仅 V2 无 V1 会在 Android 6 及以下出现解析失败 -->
@@ -38,8 +39,10 @@
     <AndroidResource Include="Resources\mipmap-xxhdpi\Icon.png" />
     <AndroidResource Include="Resources\mipmap-xxxhdpi\Icon.png" />
 
-    <!-- drawable/Icon.png：AndroidManifest @drawable/icon + 通知栏小图标 + splash 品牌图 (288x288) -->
+    <!-- drawable/Icon.png：AndroidManifest @drawable/icon + splash 品牌图 (288x288) -->
     <AndroidResource Include="Resources\drawable\Icon.png" />
+    <!-- 通知栏 small icon：必须是 alpha-only 单色矢量图，否则 Android 会渲染成白块 -->
+    <AndroidResource Include="Resources\drawable\ic_stat_notify.xml" />
   </ItemGroup>
 
   <ItemGroup>

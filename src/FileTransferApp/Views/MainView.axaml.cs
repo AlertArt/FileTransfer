@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Platform;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -24,6 +25,7 @@ public partial class MainView : UserControl
     private bool _lastAppliedCompact;
     private bool _lastAppliedShort;
     private bool _initialized;
+    private IInsetsManager? _insetsManager;
 
     public MainView()
     {
@@ -39,6 +41,84 @@ public partial class MainView : UserControl
         base.OnDataContextChanged(e);
         // DataContext 就绪后立即根据当前宽高计算一次响应式状态
         ApplyResponsiveMode(Bounds.Width, Bounds.Height);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // 【关键·根因】看 Avalonia 源码 TopLevel.InvalidateChildInsetsPadding()：
+        //   if (Content is Control child && ...)
+        //       if (child.GetValue(AutoSafeAreaPaddingProperty))
+        //           child.SetValue(PaddingProperty, insetsManager.SafeAreaPadding, Style);
+        // 即该附着属性是**从 TopLevel 的内容(MainView)读取**，并把安全区作为**内容的 Padding** 施加。
+        // 之前设在 TopLevel 上完全无效 → Avalonia 始终给 MainView 加了一份 safe.Top 的 Padding，
+        // 又与下面手动给 TopBarContentColumn 垫的 safe.Top margin 叠加 → "双倍安全区"，
+        // 顶栏因此异常高，且怎么调内容尺寸都看不出变化。必须设在 this（MainView 即 TopLevel.Content）上。
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is not null)
+        {
+            TopLevel.SetAutoSafeAreaPadding(this, false);
+            // 兜底：Android 上给 TopLevel 铺品牌底色，任何未被内容覆盖的缝隙（含状态栏后）都是紫色而非黑。
+            if (OperatingSystem.IsAndroid() && topLevel is ContentControl topControl)
+                topControl.Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#6366F1"));
+        }
+
+        // 手动接管安全区：监听 InsetsManager 把顶部/底部安全区垫到顶栏/底栏的内容层，
+        // 让紫色头部背景真正延伸到屏幕边缘，同时内容（Logo/标题/按钮）避开状态栏与手势条。
+        if (topLevel?.InsetsManager is { } insets)
+        {
+            _insetsManager = insets;
+            // 关键：Android 上 DisplaysEdgeToEdge 默认 false → SafeAreaPadding 恒为 0，
+            // 且 AndroidInsetsManager 构造时会以 SetDecorFitsSystemWindows(true) 覆盖掉
+            // MainActivity.OnCreate 里设置的 false，导致应用没有真正延伸到状态栏后、
+            // 顶部留下一段系统栏空白。显式开启 edge-to-edge 后：
+            //   1) 状态栏区域透明，紫色顶栏背景可铺满到物理屏幕顶边；
+            //   2) SafeAreaPadding 返回真实内边距，顶栏内容能避让状态栏/刘海。
+            insets.DisplayEdgeToEdgePreference = true;
+            ApplySafeAreaPadding(insets.SafeAreaPadding);
+            insets.SafeAreaChanged += OnSafeAreaChanged;
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (_insetsManager is not null)
+        {
+            _insetsManager.SafeAreaChanged -= OnSafeAreaChanged;
+            _insetsManager = null;
+        }
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e)
+        => ApplySafeAreaPadding(e.SafeAreaPadding);
+
+    /// <summary>
+    /// 把安全区内边距应用到顶栏/底栏/覆盖面板的内容层（而非整棵布局树）。
+    /// 这样紫色顶栏 Background 铺满到屏幕最顶，文字/按钮在状态栏/刘海之下；底栏内容避开手势条。
+    /// </summary>
+    private void ApplySafeAreaPadding(Thickness safe)
+    {
+        if (TopBarContentColumn is not null)
+            TopBarContentColumn.Margin = new Thickness(0, safe.Top + 0, 0, 0);
+        if (BottomBarContentColumn is not null)
+            BottomBarContentColumn.Margin = new Thickness(0, 0, 0, safe.Bottom);
+        // 注意：安全区只垫到**顶栏内容列**（紫色底铺到屏幕最顶 = 品牌延伸），
+        // 顶栏 Border 本身保持 Auto 高度由内容决定 —— 若这里把预算成让顶栏
+        // Border 长高，就会产生"紫色大块向下挤压、全部 UI 下移"。
+        if (OverlayHeaderGrid is not null)
+            OverlayHeaderGrid.Margin = new Thickness(
+                OverlayHeaderGrid.Margin.Left,
+                12 + safe.Top,
+                OverlayHeaderGrid.Margin.Right,
+                OverlayHeaderGrid.Margin.Bottom);
+        // 覆盖面板（日志/设置/关于）底部内容也避让手势条 / 导航栏，避免被系统白条或手势区遮挡
+        if (OverlayContent is not null)
+            OverlayContent.Margin = new Thickness(
+                OverlayContent.Margin.Left,
+                OverlayContent.Margin.Top,
+                OverlayContent.Margin.Right,
+                14 + safe.Bottom);
     }
 
     private void MainView_LayoutUpdated(object? sender, EventArgs e)

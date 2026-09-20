@@ -20,7 +20,8 @@ namespace FileTransferApp.Android;
     Theme = "@style/MyTheme.NoActionBar",
     Icon = "@drawable/icon",
     MainLauncher = true,
-    ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
+    ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode,
+    ScreenOrientation = global::Android.Content.PM.ScreenOrientation.Portrait)]
 public class MainActivity : AvaloniaMainActivity
 {
     private const int NotificationPermissionRequestCode = 1001;
@@ -47,27 +48,15 @@ public class MainActivity : AvaloniaMainActivity
         // 此处验证 DI 是否就绪
         global::Android.Util.Log.Info(TAG, $"ServiceLocator type={ServiceLocator.Services.GetType().Name}");
 
-        // 2.5 全屏沉浸模式（隐藏系统栏）：必须在 base.OnCreate 之前设置，
-        //     SetDecorFitsSystemWindows(false) 让 Avalonia 视图在 attach 前拿到完整 insets，
-        //     之后 HideSystemBars() 真正隐藏状态栏+导航栏（IMMERSIVE_STICKY，滑动边缘临时唤出自动隐藏）。
-        //     注意：仅 Hide 一次不够——窗口重新获焦（对话框关闭/返回前台）时系统栏会恢复，
-        //     因此 OnWindowFocusChanged(true) 会再次调用 HideSystemBars()（见类底部）。
-        if (Window is not null)
-        {
-            try
-            {
-                if (global::Android.OS.Build.VERSION.SdkInt < global::Android.OS.BuildVersionCodes.VanillaIceCream)
-                {
-                    AndroidX.Core.View.WindowCompat.SetDecorFitsSystemWindows(Window, false);
-                    global::Android.Util.Log.Info(TAG, "WindowCompat.SetDecorFitsSystemWindows(false) OK");
-                }
-                HideSystemBars();
-            }
-            catch (Exception ex)
-            {
-                global::Android.Util.Log.Warn(TAG, $"Edge-to-edge setup failed: {ex.Message}");
-            }
-        }
+        // 2.5 edge-to-edge 接管系统栏（成熟 App 语义）：保留状态栏与导航栏（充电/时间/电量/导航始终可见），
+        //     把两者背景设为透明，让紫色内容自然延伸到屏幕最顶端和最底端实现无缝衔接；
+        //     系统图标改为白色以在品牌紫上清晰显示。注意：切记不要再 Hide 系统栏——隐藏后
+        //     顶部会露出窗口黑色背景、且系统状态（如充电中）一并消失，这正是本修复要消除的。
+        //     全部逻辑收敛到 SetupEdgeToEdgeSystemBars()：OnCreate 前置调用一次、base.OnCreate
+        //     之后再跑一次、OnWindowFocusChanged(true) 每次重设一次——防止 Avalonia 的 InsetsManager
+        //     或系统把 SetDecorFitsSystemWindows(true) 重新塞回，导致顶部重新出现系统栏空白带。
+        try { SetupEdgeToEdgeSystemBars(); }
+        catch (Exception ex) { global::Android.Util.Log.Warn(TAG, $"Edge-to-edge setup failed: {ex.Message}"); }
 
         // 2. Avalonia 初始化与 View 创建（DI 已在 Application.OnCreate 中配置完毕）
         try
@@ -88,6 +77,12 @@ public class MainActivity : AvaloniaMainActivity
             global::Android.Util.Log.Error(TAG, "base.OnCreate Exception: " + ex.Message);
             throw;
         }
+
+        // 2.6 base.OnCreate 之后再次强制 edge-to-edge：Avalonia 视图 / InsetsManager 在此阶段创建，
+        //     可能以 SetDecorFitsSystemWindows(true) 复位 —— 必须在其之后重新声明，
+        //     否则顶部会重新出现系统栏空白带，紫色顶栏铺不到屏幕最顶。
+        try { SetupEdgeToEdgeSystemBars(); }
+        catch (Exception ex) { global::Android.Util.Log.Warn(TAG, $"Edge-to-edge re-assert failed: {ex.Message}"); }
 
         // 4. 运行时通知权限申请（Android 13+）
         try
@@ -115,20 +110,26 @@ public class MainActivity : AvaloniaMainActivity
     }
 
     /// <summary>
-    /// 窗口重新获焦：系统栏可能因临时唤出 / 对话框关闭 / 返回前台而恢复显示，
-    /// 重写此方法在每次获焦时重新隐藏（配合 BehaviorShowTransientBarsBySwipe 实现持久全屏）。
+    /// 窗口重新获焦：Android 可能在对话框关闭 / 返回前台时重设系统栏配色，
+    /// 重写此方法在每次获焦时重新应用"保留系统栏 + 透明背景 + 白色图标"的 edge-to-edge 语义。
     /// </summary>
     public override void OnWindowFocusChanged(bool hasFocus)
     {
         base.OnWindowFocusChanged(hasFocus);
         if (hasFocus)
         {
-            HideSystemBars();
+            SetupEdgeToEdgeSystemBars();
         }
     }
 
-    /// <summary>真正隐藏系统栏（状态栏+导航栏）：API30+ 用 InsetsController，API21-29 用传统 SystemUiVisibility flags。</summary>
-    private void HideSystemBars()
+    /// <summary>
+    /// edge-to-edge 接管（成熟语义，微信/支付宝一致）：**保留**状态栏与导航栏不隐藏——
+    /// 这样时间 / 电量 / 充电图标 / 导航始终可见；把二者背景设为透明，让品牌紫色内容
+    /// 自然铺到屏幕最顶端与最底端实现无缝衔接；系统图标改白色以在紫底上清晰显示。
+    /// 注意：**绝不能调用 Hide()**——隐藏后顶部会露出窗口默认黑色背景、且系统状态（如充电）
+    /// 一并消失，这正是本修复要消除的问题。API30+ 用 InsetsController，API21-29 用透明背景色。
+    /// </summary>
+    private void SetupEdgeToEdgeSystemBars()
     {
         const string TAG = "FTA.FULLSCREEN";
         if (Window is not { } window || Window.DecorView is not { } decor)
@@ -139,33 +140,98 @@ public class MainActivity : AvaloniaMainActivity
 
         try
         {
+            // (0) 解除 decor 对系统栏的空间预留（全 API）——「内容延伸到状态栏背后」的根本开关。
+            //     API35+ 系统已强制 edge-to-edge，这里对所有版本显式声明，
+            //     并放在 SetupEdgeToEdgeSystemBars() 内部，确保每次 OnWindowFocusChanged 都能重新生效，
+            //     防 Avalonia InsetsManager 或系统以 SetDecorFitsSystemWindows(true) 复位顶部空白带。
+            AndroidX.Core.View.WindowCompat.SetDecorFitsSystemWindows(window, false);
+
+            // (0.5) 允许内容铺进刘海/挖孔区域（API28+）：否则打孔屏顶部会保留黑色/白色竖条，
+            //     表现为"清晰可见的刘海横条 / 顶不到头"，这正是 purple 顶栏铺不满的常见根因。
+            //     与 fitSystemWindows=false 配套：内容 + 状态栏图标都会延伸到刘海两侧。
+#pragma warning disable CA1416
+            if (global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.P &&
+                window.Attributes is { } attrs)
+                attrs.LayoutInDisplayCutoutMode = global::Android.Views.LayoutInDisplayCutoutMode.ShortEdges;
+#pragma warning restore CA1416
+
+            // 关键决策（微信/支付宝一致）：**保留**状态栏与导航栏——绝不 Hide()。
+            // 一旦隐藏，顶部会露出窗口默认黑色背景、且系统状态（时间/电量/充电图标/导航）
+            // 一并消失，这正是用户反馈的"顶部变黑 + 看不到充电"的根因。改为：
+            //   (a) 状态栏与导航栏背景设为**透明**，让品牌紫色内容自然铺到屏幕最顶端/最底端实现无缝；
+            //   (b) 系统图标：状态栏始终在品牌紫背景上 → **白色**；
+            //       导航栏背景随主题（浅色=白底/深色=深底）→ **跟随主题**，否则浅色主题下白图标在白底上隐形。
+
             if (global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.R)
             {
+                // API30+：InsetsController —— 显示系统栏 + 透明背景 + 图标配色
                 var controller = AndroidX.Core.View.WindowCompat.GetInsetsController(window, decor)!;
                 controller.SystemBarsBehavior = AndroidX.Core.View.WindowInsetsControllerCompat.BehaviorShowTransientBarsBySwipe;
-                controller.Hide(AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars());
-                controller.AppearanceLightStatusBars = true;
-                controller.AppearanceLightNavigationBars = true;
-                global::Android.Util.Log.Info(TAG, "HideSystemBars OK (InsetsController, API>=30)");
+                controller.Show(AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars());
+
+                // 系统栏背景透明（让紫色透出来）。API35+ 强制 edge-to-edge 时系统已默认透明，
+                // 且 SetStatusBarColor/SetNavigationBarColor 已标记过时，仅对低于 35 的版本显式设置。
+#pragma warning disable CA1422
+                if (global::Android.OS.Build.VERSION.SdkInt < global::Android.OS.BuildVersionCodes.VanillaIceCream)
+                {
+                    window.SetStatusBarColor(global::Android.Graphics.Color.Transparent);
+                    window.SetNavigationBarColor(global::Android.Graphics.Color.Transparent);
+                }
+#pragma warning restore CA1422
+
+                // 系统图标改白色（在紫色上显示）：Light 意为"图标为深色"，故置 false 得到白色图标
+                controller.AppearanceLightStatusBars = false;
+                // 导航栏随主题：浅色主题 → 深色图标(白底)，深色主题 → 白色图标(深底)
+                var darkMode = IsDarkModeEnabled();
+                controller.AppearanceLightNavigationBars = !darkMode;
+                global::Android.Util.Log.Info(TAG, "Edge-to-edge OK (InsetsController, API>=30): keep bars + transparent + icons(status=white, nav=" + (darkMode ? "white" : "dark") + ")");
             }
             else
             {
 #pragma warning disable CA1416 // 仅 API21-29 路径
 #pragma warning disable CA1422
-                decor.SystemUiFlags = global::Android.Views.SystemUiFlags.ImmersiveSticky |
-                    global::Android.Views.SystemUiFlags.Fullscreen |
-                    global::Android.Views.SystemUiFlags.HideNavigation |
+                // API21-29：传统 SystemUiVisibility —— 保留系统栏，仅用 Layout 系列 flags 布局铺满 + 透明背景
+#pragma warning disable CA1416
+                window.SetStatusBarColor(global::Android.Graphics.Color.Transparent);
+                window.SetNavigationBarColor(global::Android.Graphics.Color.Transparent);
+#pragma warning restore CA1416
+                decor.SystemUiFlags =
                     global::Android.Views.SystemUiFlags.LayoutStable |
                     global::Android.Views.SystemUiFlags.LayoutFullscreen |
                     global::Android.Views.SystemUiFlags.LayoutHideNavigation;
 #pragma warning restore CA1422
 #pragma warning restore CA1416
-                global::Android.Util.Log.Info(TAG, "HideSystemBars OK (SystemUiVisibility, API21-29)");
+                global::Android.Util.Log.Info(TAG, "Edge-to-edge OK (SystemUiVisibility, API21-29): keep bars + transparent");
             }
         }
         catch (Exception ex)
         {
-            global::Android.Util.Log.Warn(TAG, $"HideSystemBars failed: {ex.Message}");
+            global::Android.Util.Log.Warn(TAG, $"SetupEdgeToEdgeSystemBars failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 当前是否深色模式：优先应用内主题偏好（ThemeService），"跟随系统"时回退到系统夜间模式。
+    /// 用于导航栏图标配色（底部是应用 Surface 白底/深底），保证图标永不变色隐形。
+    /// </summary>
+    private bool IsDarkModeEnabled()
+    {
+        try
+        {
+            switch (ThemeService.Instance.Current)
+            {
+                case ThemePreference.Dark:
+                    return true;
+                case ThemePreference.Light:
+                    return false;
+            }
+            var uiMode = Resources?.Configuration?.UiMode;
+            return uiMode is not null &&
+                   (uiMode & global::Android.Content.Res.UiMode.NightMask) == global::Android.Content.Res.UiMode.NightYes;
+        }
+        catch
+        {
+            return false;
         }
     }
 

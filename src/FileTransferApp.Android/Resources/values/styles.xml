@@ -6,7 +6,18 @@
 
   <style name="MyTheme.NoActionBar" parent="@style/Theme.AppCompat.DayNight.NoActionBar">
     <item name="android:windowActionBar">false</item>
-    <item name="android:windowBackground">@drawable/splash_screen</item>
+    <item name="android:windowBackground">@color/splash_background</item>
     <item name="android:windowNoTitle">true</item>
+    <!-- 主动画窗口绘制系统栏背景 + 状态栏/导航栏透明 + 状态栏白字（API21-30 生效）。
+         【坑】此前这些属性只在 values-v31 的 MyTheme.Main 上，而代码并未调用
+         installSplashScreen()，postSplashScreenTheme 永不生效，App 实际用的主题
+         是 MyTheme.NoActionBar：其 windowBackground=@null + 深色 AppCompat 父主题
+         → 状态栏背后渲染成纯黑条。现在把正确配置直接写进实际生效的主题，
+         即使运行时 decorFitsSystemWindows 未生效，透明栏也会透出品牌紫背景，杜绝黑条。 -->
+    <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <!-- 状态栏图标默认白色（顶栏为品牌紫）；颜色值在 values-night/colors.xml 也有深色版 -->
+    <item name="android:windowLightStatusBar">false</item>
   </style>
 </resources>

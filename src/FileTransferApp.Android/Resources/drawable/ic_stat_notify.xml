@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 纯单色(白色 alpha)通知小图标:圆形箭头(上下传) 居中。
+         Android 系统要求:通知 small icon 必须用 alpha-only 色板的矢量图形,
+         任何彩色/位图都会被渲染成空白方块。此文件只含单一白色路径。 -->
+    <path
+        android:pathData="M12,4 L16,8 L13.5,8 L13.5,12 L10.5,12 L10.5,8 L8,8 Z"
+        android:fillColor="#FFFFFFFF"/>
+    <path
+        android:pathData="M10.5,12 L13.5,12 L13.5,16 L16,16 L12,20 L8,16 L10.5,16 Z"
+        android:fillColor="#FFFFFFFF"/>
+    <!-- 上下箭头合成一个圆环:两条白色路径,背景全透明 -->
+</vector>
