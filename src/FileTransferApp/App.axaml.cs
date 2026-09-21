@@ -119,6 +119,11 @@ public partial class App : Application
 
     private static void BindMainView(MainViewModel vm)
     {
+        // 激活「传输进度/状态 → 平台通知」桥：构造即注册到消息总线；
+        // 单例由 DI 容器持有，解析一次后不会被 GC（WeakReferenceMessenger 是弱引用）。
+        try { ServiceLocator.Services?.GetService<TransferNotificationBridge>(); }
+        catch (Exception ex) { BootDiagnostics.Warn("BindMainView: resolve TransferNotificationBridge FAIL: " + ex.Message); }
+
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var win = new MainWindow { DataContext = vm };

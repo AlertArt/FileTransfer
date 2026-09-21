@@ -54,6 +54,9 @@ public static class ServiceConfiguration
         services.AddSingleton<ITransferApprovalService, DialogTransferApprovalService>();
         services.AddSingleton<IFilePickerService, AvaloniaFilePickerService>();
 
+        // 传输进度/状态 → 平台通知（Android 通知栏 / Windows Toast / iOS 本地通知）
+        services.AddSingleton<TransferNotificationBridge>();
+
         // 根视图模型
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<LogsViewModel>();

@@ -365,5 +365,26 @@ public class TransferKeepAliveCoordinatorTests
         {
             StopCallCount++;
         }
+
+        public void UpdateKeepAlive(string title, string content, double? progress)
+        {
+            UpdateCallCount++;
+            LastStartTitle = title;
+            LastStartContent = content;
+            LastProgress = progress;
+        }
+
+        public void ShowStatusNotification(string title, string content)
+        {
+            StatusCallCount++;
+            LastStatusTitle = title;
+            LastStatusContent = content;
+        }
+
+        public int UpdateCallCount { get; private set; }
+        public int StatusCallCount { get; private set; }
+        public double? LastProgress { get; private set; }
+        public string? LastStatusTitle { get; private set; }
+        public string? LastStatusContent { get; private set; }
     }
 }

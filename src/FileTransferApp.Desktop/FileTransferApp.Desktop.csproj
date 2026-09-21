@@ -3,7 +3,10 @@
     <OutputType>WinExe</OutputType>
     <!--If you are willing to use platform-specific APIs, use conditional compilation.
     See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- net10.0-windows10.0.19041.0：启用 Windows SDK 投影（Windows.UI.Notifications），
+         供系统 Toast 通知使用；桌面 head 本就仅面向 Windows。 -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- 现代风格 App 图标：多尺寸嵌入的 ICO 文件。发布产物 exe 本身即带此图标。 -->
@@ -27,6 +30,9 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="CommunityToolkit.WinUI.Notifications" />
+    <!-- 显式引用以覆盖 Toast 工具包的传递依赖 4.7.0（安全更新） -->
+    <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
   <ItemGroup>

@@ -11,5 +11,7 @@ public sealed class NullPlatformKeepAliveService : IPlatformKeepAliveService
     public static readonly NullPlatformKeepAliveService Instance = new();
 
     public void StartKeepAlive(string title, string content) { /* no-op */ }
+    public void UpdateKeepAlive(string title, string content, double? progress) { /* no-op */ }
     public void StopKeepAlive() { /* no-op */ }
+    public void ShowStatusNotification(string title, string content) { /* no-op */ }
 }

@@ -58,8 +58,8 @@ sealed class Program
         var services = new ServiceCollection();
         // 平台特定服务
         services.AddSingleton<IStorageService, DesktopStorageService>();
-        // Desktop 无需前台保活（窗口在前台），注入空实现占位；移动端会注入对应平台实现
-        services.AddSingleton<IPlatformKeepAliveService>(NullPlatformKeepAliveService.Instance);
+        // Windows 系统 Toast 通知：传输进行中显示进度，完成/失败投放状态通知
+        services.AddSingleton<IPlatformKeepAliveService, WindowsNotificationService>();
         services.AddSingleton<IFileOpenService, DesktopFileOpenService>();
         services.AddSingleton<ILogFileProvider, DesktopLogFileProvider>();
         // 跨平台核心 + UI 服务

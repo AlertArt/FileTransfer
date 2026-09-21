@@ -16,6 +16,11 @@
 
         <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 
+        <!-- Windows 系统 Toast 通知（桌面 head，仅 net10.0-windows 目标） -->
+        <PackageVersion Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
+        <!-- 覆盖 Toast 工具包传递引入的 System.Drawing.Common 4.7.0（存在已知漏洞 NU1904） -->
+        <PackageVersion Include="System.Drawing.Common" Version="8.0.0" />
+
         <!-- DI / Hosting -->
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
 

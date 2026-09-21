@@ -4,6 +4,7 @@ using FileTransferApp.Core.Services.Impl;
 using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
 using UIKit;
+using UserNotifications;
 
 namespace FileTransferApp.iOS.Services;
 
@@ -55,6 +56,44 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
         {
             ShowKeepAliveAlert(result.EffectiveTitle, result.EffectiveContent);
         }
+    }
+
+    /// <summary>
+    /// iOS 不支持像 Android 那样持续更新的前台通知；进行中状态保持 no-op，
+    /// 避免与保活 alert 重复打扰用户。
+    /// </summary>
+    public void UpdateKeepAlive(string title, string content, double? progress)
+    {
+        // no-op：iOS 无持久通知栏进程级通知。
+    }
+
+    /// <summary>传输完成 / 失败：投放本地通知（首次会请求通知权限；未授权则静默忽略）。</summary>
+    public void ShowStatusNotification(string title, string content)
+    {
+        try
+        {
+            var center = UNUserNotificationCenter.Current;
+            center.RequestAuthorization(
+                UNAuthorizationOptions.Alert | UNAuthorizationOptions.Sound,
+                (granted, _) =>
+                {
+                    if (!granted) return;
+                    try
+                    {
+                        var notifContent = new UNMutableNotificationContent
+                        {
+                            Title = title,
+                            Body = content,
+                            Sound = UNNotificationSound.Default,
+                        };
+                        var request = UNNotificationRequest.FromIdentifier(
+                            Guid.NewGuid().ToString("N"), notifContent, null);
+                        center.AddNotificationRequest(request, null);
+                    }
+                    catch { /* ignore */ }
+                });
+        }
+        catch { /* 通知不可用不影响主流程 */ }
     }
 
     public void StopKeepAlive()
