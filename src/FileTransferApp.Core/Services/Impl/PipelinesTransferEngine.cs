@@ -30,6 +30,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
     private readonly IMessenger _messenger;
     private readonly HttpClient _http;
     private readonly IPairingService? _pairing;
+    private readonly IDiscoveryService? _discovery;
 
     private readonly ConcurrentDictionary<string, TransferTaskInfo> _tasks = new();
     private readonly ConcurrentDictionary<string, SpeedCalculator> _speeds = new();
@@ -53,13 +54,15 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         IThumbnailService thumbnail,
         ITransferApprovalService approval,
         IMessenger messenger,
-        IPairingService? pairing = null)
+        IPairingService? pairing = null,
+        IDiscoveryService? discovery = null)
     {
         _storage = storage;
         _thumbnail = thumbnail;
         _approval = approval;
         _messenger = messenger;
         _pairing = pairing;
+        _discovery = discovery;
         // 禁用 Expect: 100-continue：默认行为会让 HttpClient 先发请求头等 100 Continue 再发 body，
         // 我们的简易 HTTP 服务器虽然已处理该头，但禁用后可直接发送 body，减少握手延迟与失败概率。
         var handler = new SocketsHttpHandler
@@ -137,6 +140,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             return;
         }
 
+        RefreshPeerFromDiscovery(task);
         var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
 
         // Metadata 握手
@@ -388,6 +392,35 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         }
     }
 
+    /// <summary>
+    /// 发送/续传前，按 <c>DeviceId</c> 用发现服务的最新结果刷新对端地址。
+    /// 发现层每次心跳都会用新的 <see cref="DeviceNode"/> 覆盖字典，但任务在创建时固定了当时的
+    /// Peer 引用；对端换 IP（重连/漫游）后，已存在的失败/断开任务若直接重试会一直打旧地址。
+    /// 这里按 DeviceId 取回最新节点，更新任务 Peer 的 IP/端口后再握手。
+    /// 仅对发送方向生效（接收方向的 Peer 是 TCP 源地址，不应被覆盖）；对端不在发现列表中
+    /// （如手动直连的伪节点）时保持原值。
+    /// </summary>
+    private void RefreshPeerFromDiscovery(TransferTaskInfo task)
+    {
+        if (_discovery is null || task.Peer is null) return;
+        if (task.Direction != TransferDirection.Send) return;
+        var id = task.Peer.DeviceId;
+        if (string.IsNullOrEmpty(id)) return;
+        try
+        {
+            var latest = _discovery.Devices.FirstOrDefault(d => d.DeviceId == id);
+            if (latest?.IpAddress is null) return;
+            if (!Equals(task.Peer.IpAddress, latest.IpAddress) || task.Peer.Port != latest.Port)
+            {
+                FtaTrace.Info("FTA.SEND",
+                    $"refresh peer {id}: {task.Peer.IpAddress}:{task.Peer.Port} -> {latest.IpAddress}:{latest.Port}");
+            }
+            task.Peer.IpAddress = latest.IpAddress;
+            if (latest.Port > 0) task.Peer.Port = latest.Port;
+        }
+        catch { /* 发现层异常不影响发送 */ }
+    }
+
     // ===================== 控制命令 =====================
 
     public Task PauseAsync(string fileId)
@@ -465,7 +498,8 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             NotifyPeerControlAsync(task, TransferAction.RESUME);
 
             // 恢复时重新握手，获取对端最新 Bitmap（可能已部分到达）
-            var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
+            RefreshPeerFromDiscovery(task);
+        var baseUri = $"http://{task.Peer!.IpAddress}:{task.Peer.Port}";
             var prepareReq = new PrepareRequest
             {
                 FileId = task.FileId,

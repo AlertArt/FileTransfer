@@ -43,7 +43,8 @@ public static class ServiceConfiguration
             sp.GetRequiredService<IThumbnailService>(),
             sp.GetRequiredService<ITransferApprovalService>(),
             sp.GetRequiredService<IMessenger>(),
-            sp.GetRequiredService<IPairingService>()));
+            sp.GetRequiredService<IPairingService>(),
+            sp.GetRequiredService<IDiscoveryService>()));
         services.AddSingleton<ITransferServer>(sp => new TransferHttpServer(
             sp.GetRequiredService<ITransferEngine>(),
             sp.GetRequiredService<IPairingService>()));
