@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  # ---------- 单元测试（跨平台，跑在 Linux） ----------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Core tests
+        run: dotnet test tests/FileTransferApp.Core.Tests/FileTransferApp.Core.Tests.csproj -c Release --nologo
+      - name: App tests
+        run: dotnet test tests/FileTransferApp.Tests/FileTransferApp.Tests.csproj -c Release --nologo
+
+  # ---------- Android fat APK ----------
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android workload
+        run: dotnet workload install android
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ -n "$KEYSTORE_B64" ]; then
+            # 仓库 secrets 提供了正式 keystore（base64）时优先使用
+            echo "$KEYSTORE_B64" | base64 -d > "$HOME/.android/release.keystore"
+            echo "FTA_KEYSTORE=$HOME/.android/release.keystore" >> "$GITHUB_ENV"
+          else
+            # 否则生成标准 debug keystore（与本地一致，用于侧载分发）
+            if [ ! -f "$HOME/.android/debug.keystore" ]; then
+              keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+            fi
+            echo "FTA_KEYSTORE=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          fi
+      - name: Publish APK
+        env:
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
+          STORE_PASS: ${{ secrets.ANDROID_STORE_PASS }}
+        run: |
+          ALIAS="${KEY_ALIAS:-androiddebugkey}"
+          KPASS="${KEY_PASS:-android}"
+          SPASS="${STORE_PASS:-android}"
+          dotnet publish src/FileTransferApp.Android/FileTransferApp.Android.csproj \
+            -c Release -f net10.0-android \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$FTA_KEYSTORE" \
+            -p:AndroidSigningKeyAlias="$ALIAS" \
+            -p:AndroidSigningKeyPass="$KPASS" \
+            -p:AndroidSigningStorePass="$SPASS" \
+            -o build/release/android
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/release/android/*-Signed.apk
+          if-no-files-found: error
+
+  # ---------- Windows 自包含 exe ----------
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Publish win-x64
+        run: dotnet publish src/FileTransferApp.Desktop/FileTransferApp.Desktop.csproj -c Release -r win-x64 --self-contained true -o build/release/win-x64
+      - name: Zip
+        run: Compress-Archive -Path build/release/win-x64/* -DestinationPath build/FileTransferApp-win-x64.zip -Force
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-x64
+          path: build/FileTransferApp-win-x64.zip
+          if-no-files-found: error
+
+  # ---------- tag 自动发版 ----------
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ test, android, windows ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Stage release assets
+        run: |
+          mkdir -p release
+          cp artifacts/android-apk/*-Signed.apk release/com.CompanyName.FileTransferApp-Signed.apk
+          cp artifacts/win-x64/FileTransferApp-win-x64.zip "release/FileTransferApp-${GITHUB_REF_NAME}-win-x64.zip"
+          ls -l release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

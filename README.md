@@ -1,5 +1,7 @@
 # FileTransferApp — 跨平台局域网文件快传
 
+![CI](https://github.com/AlertArt/FileTransfer/actions/workflows/ci.yml/badge.svg)
+
 基于 **Avalonia UI 12 + .NET 10** 的跨平台文件传输应用，支持 **Windows ↔ Android ↔ iOS** 局域网高速文件互传。
 
 > 设计目标：零配置、即开即用、现代化 UI、大文件稳定传输。
