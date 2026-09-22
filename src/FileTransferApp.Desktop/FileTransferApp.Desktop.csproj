@@ -14,7 +14,7 @@
     <AssemblyTitle>快传 · Nearby Transfer</AssemblyTitle>
     <Product>快传 · Nearby Transfer</Product>
     <Description>跨平台（Windows/Android）局域网快传工具</Description>
-    <Version>1.1.6</Version>
+    <Version>1.1.7</Version>
   </PropertyGroup>
 
   <PropertyGroup>

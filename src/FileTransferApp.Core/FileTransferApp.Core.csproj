@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FileTransferApp.Core</RootNamespace>
     <!-- 与 Desktop/Android 发布版本保持一致，日志 BuildVersion() 读取此程序集统一显示 -->
-    <Version>1.1.6</Version>
+    <Version>1.1.7</Version>
   </PropertyGroup>
 
   <ItemGroup>
