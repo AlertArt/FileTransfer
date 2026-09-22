@@ -123,7 +123,8 @@ public sealed class TransferHttpServer : ITransferServer
                     }
                 }
 
-                FtaTrace.Info("FTA.HTTP", $"REQ {request.Method} {request.Path} -> {status} from {peer.IpAddress}:{peer.Port}");
+                // 每请求一条（大文件每 2MB 一个 /chunk 请求）→ Verbose，默认不落盘，避免日志暴涨
+                FtaTrace.Verbose("FTA.HTTP", $"REQ {request.Method} {request.Path} -> {status} from {peer.IpAddress}:{peer.Port}");
                 await WriteResponseAsync(stream, status, responseJson).ConfigureAwait(false);
             }
         }
@@ -333,7 +334,8 @@ public sealed class TransferHttpServer : ITransferServer
         var bodyLen = headers.TryGetValue(ProtocolConstants.HeaderContentLength, out var lenStr)
                       && int.TryParse(lenStr, out var bl) ? bl : 0;
 
-        Trace.TraceInformation($"[FTA.HTTP] {method} {path} | Content-Length={bodyLen} | preloaded={Math.Max(0, total - bodyPrelude)}");
+        // 与上面的 REQ 日志重复，且每请求一条 → Verbose
+        FtaTrace.Verbose("FTA.HTTP", $"{method} {path} | Content-Length={bodyLen} | preloaded={Math.Max(0, total - bodyPrelude)}");
 
         var body = new byte[bodyLen];
         var preloaded = Math.Max(0, total - bodyPrelude);

@@ -54,13 +54,16 @@ public sealed class AndroidKeepAliveService : IPlatformKeepAliveService
     public void StopKeepAlive()
     {
         Status.Stop();
+        // Android 采用「常驻前台服务」策略：任务结束**不停止服务**，仅把通知切回空闲文案。
+        // 若在这里 StopService，进程会在传输结束后失去前台保护，被系统冻结/回收后
+        // UDP/HTTP 监听一并失效 → 对端再也发现不了本机、本机也发现不了对端（"断联后连不上"）。
         try
         {
-            _context.StopService(new Intent(_context, typeof(TransferForegroundService)));
+            TransferForegroundService.UpdateContent(_context, DefaultTitle, DefaultContent);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"停止前台保活服务失败: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"更新空闲通知失败: {ex.Message}");
         }
     }
 

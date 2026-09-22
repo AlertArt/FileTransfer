@@ -68,6 +68,8 @@
   "LogsCopy": "Copy",
   "LogsCopied": "Copied",
   "LogsEmpty": "No log files found",
+  "LogsVerbose": "Verbose log",
+  "LogsVerboseHint": "Log per-chunk/per-request details for troubleshooting (larger log)",
   "About": "About",
   "AboutTitle": "About",
   "About.Version": "Version {0}",

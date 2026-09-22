@@ -10,8 +10,8 @@
 
     <DockPanel>
 
-        <!-- 头：文件路径 + 操作按钮 -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8"
+        <!-- 头：文件路径 + 详细日志开关 + 操作按钮 -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8"
               Margin="0,0,0,10">
             <SelectableTextBlock Grid.Column="0"
                                  Text="{Binding SourceInfo}"
@@ -19,20 +19,25 @@
                                  FontSize="11"
                                  TextWrapping="Wrap"
                                  VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1"
+            <CheckBox Grid.Column="1"
+                      Content="{svc:Localize Key=LogsVerbose}"
+                      IsChecked="{Binding VerboseEnabled}"
+                      ToolTip.Tip="{svc:Localize Key=LogsVerboseHint}"
+                      VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2"
                        x:Name="CopyHint"
                        Text="{svc:Localize Key=LogsCopied}"
                        Classes="Muted"
                        FontSize="11"
                        VerticalAlignment="Center"
                        IsVisible="False" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     Classes="Icon"
                     Content="📋"
                     ToolTip.Tip="{svc:Localize Key=LogsCopy}"
                     Click="OnCopyClick"
                     IsEnabled="{Binding HasLogs}" />
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     Classes="Icon"
                     Content="⟳"
                     ToolTip.Tip="{svc:Localize Key=LogsRefresh}"

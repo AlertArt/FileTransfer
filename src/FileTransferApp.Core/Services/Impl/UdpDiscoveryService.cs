@@ -27,6 +27,7 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
     private Timer? _heartbeatTimer;
     private Timer? _sweepTimer;
     private bool _disposed;
+    private int _recvErrorStreak;
 
     public DeviceNode Self { get; }
 
@@ -68,6 +69,7 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
 
     public Task StartAsync(CancellationToken ct = default)
     {
+        if (_cts is not null) return Task.CompletedTask; // 幂等：已在运行则不重复绑定 53317
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _client = new UdpClient(new IPEndPoint(IPAddress.Any, ProtocolConstants.DiscoveryPort));
         _client.EnableBroadcast = true;
@@ -124,16 +126,36 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
     private async Task ReceiveLoopAsync()
     {
         var token = _cts!.Token;
-        while (!token.IsCancellationRequested && _client is not null)
+        while (!token.IsCancellationRequested)
         {
+            var client = _client;
+            if (client is null)
+            {
+                // 重建失败（旧端口未释放等）：稍后重试，避免空转
+                try { await Task.Delay(500, token).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+                continue;
+            }
+
             UdpReceiveResult result;
             try
             {
-                result = await _client.ReceiveAsync(token).ConfigureAwait(false);
+                result = await client.ReceiveAsync(token).ConfigureAwait(false);
+                _recvErrorStreak = 0;
             }
             catch (OperationCanceledException) { break; }
-            catch (ObjectDisposedException) { break; }
-            catch { continue; }
+            catch (ObjectDisposedException) { continue; } // socket 被重建：下一轮取新实例
+            catch (SocketException)
+            {
+                // 网络切换 / 底层 socket 失效：连续失败达阈值 → 重建并重新加入多播组
+                if (++_recvErrorStreak >= 5) { _recvErrorStreak = 0; TryRebindClient(); }
+                try { await Task.Delay(200, token).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+                continue;
+            }
+            catch
+            {
+                if (++_recvErrorStreak >= 5) { _recvErrorStreak = 0; TryRebindClient(); }
+                continue;
+            }
 
             DeviceNode? node;
             try
@@ -183,6 +205,29 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         var json = JsonSerializer.Serialize(Self);
         var bytes = Encoding.UTF8.GetBytes(json);
         await _client.SendAsync(bytes, bytes.Length, target).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 重建接收客户端并重新加入多播组。用于网络切换（WiFi 变更/漫游/前后台）后底层 socket 失效、
+    /// 心跳再也收不到导致"设备永久离线"的场景。失败时把 _client 置空，由接收循环稍后重试。
+    /// </summary>
+    private void TryRebindClient()
+    {
+        try { _client?.Dispose(); } catch { /* ignore */ }
+        try
+        {
+            var c = new UdpClient(new IPEndPoint(IPAddress.Any, ProtocolConstants.DiscoveryPort))
+            {
+                EnableBroadcast = true
+            };
+            try { c.JoinMulticastGroup(IPAddress.Parse(ProtocolConstants.MulticastGroup)); }
+            catch { /* 多播受限环境降级：仍可用广播/手动直连 */ }
+            _client = c;
+        }
+        catch
+        {
+            _client = null; // 立即重建失败（端口未释放等）：接收循环会稍后重试
+        }
     }
 
     private void SweepOffline()

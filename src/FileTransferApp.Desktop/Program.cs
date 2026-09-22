@@ -47,7 +47,9 @@ sealed class Program
                 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
             }
             Trace.AutoFlush = true;
-            Trace.Listeners.Add(new TextWriterTraceListener(logPath));
+            // 带大小上限 + 轮转，避免长时间运行/大文件传输把日志撑大
+            Trace.Listeners.Add(new FileTransferApp.Core.Diagnostics.RollingFileTraceListener(
+                logPath, maxBytes: 1_000_000, maxBackups: 3));
             Trace.WriteLine($"[FTA.BOOT] trace log -> {logPath}");
         }
         catch { /* 日志不可用不影响启动 */ }

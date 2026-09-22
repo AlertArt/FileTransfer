@@ -75,7 +75,7 @@ public sealed class TransferForegroundService : Service
             CallStartForegroundGuaranteed(notification, title, content);
         }
 
-        return StartCommandResult.NotSticky; // 进程被杀后不自动重建，由用户重启
+        return StartCommandResult.Sticky; // 进程被杀后由系统自动重建，保持 UDP/HTTP 长驻可发现
     }
 
     public override void OnDestroy()

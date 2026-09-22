@@ -99,6 +99,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         };
         _tasks[task.FileId] = task;
         _speeds[task.FileId] = new SpeedCalculator();
+        FtaTrace.Info("FTA.SEND", $"start->{peer.DeviceName}({peer.IpAddress}) file='{task.FileName}' size={SpeedFormatter.FormatSize(size)} fileId={task.FileId}");
         return task;
     }
 
@@ -156,38 +157,37 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         PeerSecurityContext? secCtx;
         try
         {
-            secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
-
-            // 不用 PostAsJsonAsync：它在内容较大时可能使用 Transfer-Encoding: chunked，
-            // 我们的简易 HTTP 服务器只支持 Content-Length，chunked 会导致 body 读取为空 → 400。
-            // 手动序列化为 byte[] 用 ByteArrayContent，HttpClient 会自动设置 Content-Length。
-            using var content = BuildSecureContent(prepareReq, secCtx);
-            var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, ct)
-                .ConfigureAwait(false);
-            // 不要直接 EnsureSuccessStatusCode：把非 2xx 响应体读出作为 ErrorMessage
-            // 以便用户直观看出 Android 端拒绝的原因
-            if (!resp.IsSuccessStatusCode)
+            // 握手（含 401 自动重新配对重试）。不用 PostAsJsonAsync（可能 chunked → 服务器读不到 body → 400），
+            // 手动序列化为 byte[] 走 ByteArrayContent，自动携带 Content-Length。
+            var (resp, ctx) = await PostPrepareWithRepairAsync(task, baseUri, prepareReq, ct).ConfigureAwait(false);
+            secCtx = ctx;
+            using (resp)
             {
-                string? reason = null;
-                try { reason = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); } catch { /* ignore */ }
-                if (!string.IsNullOrEmpty(reason) &&
-                    (reason.Contains('{') || reason.StartsWith("\"") || reason.Length > 300))
+                // 不要直接 EnsureSuccessStatusCode：把非 2xx 响应体读出作为 ErrorMessage，
+                // 以便用户直观看出对端拒绝的原因
+                if (!resp.IsSuccessStatusCode)
                 {
-                    // 如果是 JSON 或过长文本，降级展示 HTTP 状态码
-                    SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
+                    string? reason = null;
+                    try { reason = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); } catch { /* ignore */ }
+                    if (!string.IsNullOrEmpty(reason) &&
+                        (reason.Contains('{') || reason.StartsWith("\"") || reason.Length > 300))
+                    {
+                        // 如果是 JSON 或过长文本，降级展示 HTTP 状态码
+                        SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
+                    }
+                    else if (string.IsNullOrEmpty(reason))
+                    {
+                        SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
+                    }
+                    else
+                    {
+                        SetError(task, $"握手被拒({(int)resp.StatusCode}): {reason.Trim()}", "Err.HandshakeRejected", (int)resp.StatusCode, reason.Trim());
+                    }
+                    SetState(task, task.State, TransferState.Failed);
+                    return;
                 }
-                else if (string.IsNullOrEmpty(reason))
-                {
-                    SetError(task, $"握手失败 HTTP {(int)resp.StatusCode} ({baseUri})", "Err.HandshakeHttp", (int)resp.StatusCode, baseUri);
-                }
-                else
-                {
-                    SetError(task, $"握手被拒({(int)resp.StatusCode}): {reason.Trim()}", "Err.HandshakeRejected", (int)resp.StatusCode, reason.Trim());
-                }
-                SetState(task, task.State, TransferState.Failed);
-                return;
+                prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>(cancellationToken: ct).ConfigureAwait(false);
             }
-            prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>(cancellationToken: ct).ConfigureAwait(false);
         }
         catch (PairingDeniedException ex)
         {
@@ -360,6 +360,34 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         return sec.IsProtocolV2 && sec.IsPaired ? sec : null;
     }
 
+    /// <summary>
+    /// 发送 /prepare，并在收到 401 时自动修复配对后重试一次。
+    /// 401 表示「发送端本地配对记录与对端不一致」（对端清过数据/重装/密钥世代不同）：
+    /// 此前会被当作普通失败 → 永久 401、"怎么都连不上"。这里清除本地陈旧记录并重新走
+    /// /security/pair 握手即可自愈。返回的 HttpResponseMessage 由调用方负责 Dispose。
+    /// </summary>
+    private async Task<(HttpResponseMessage Response, PeerSecurityContext? SecCtx)> PostPrepareWithRepairAsync(
+        TransferTaskInfo task, string baseUri, PrepareRequest prepareReq, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
+            using var content = BuildSecureContent(prepareReq, secCtx);
+            var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, ct).ConfigureAwait(false);
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized && attempt == 0 && secCtx is not null
+                && !string.IsNullOrEmpty(task.Peer?.DeviceId))
+            {
+                FtaTrace.Warn("FTA.PAIR", $"401 未配对/密文无效 → 清除陈旧配对并重新握手 fileId={task.FileId} peer={task.Peer!.DeviceId}");
+                resp.Dispose();
+                try { _pairing!.Unpair(task.Peer!.DeviceId!); } catch { /* ignore */ }
+                continue;
+            }
+
+            return (resp, secCtx);
+        }
+    }
+
     // ===================== 控制命令 =====================
 
     public Task PauseAsync(string fileId)
@@ -450,13 +478,14 @@ public sealed class PipelinesTransferEngine : ITransferEngine
             };
             try
             {
-                // PostAsJsonAsync 会以 chunked 发送（无 Content-Length），简易服务器读不到 body → 400；
-                // 与初次发送一致，改用 ByteArrayContent 自动携带 Content-Length。
-                var secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
-                using var content = BuildSecureContent(prepareReq, secCtx);
-                var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, default)
-                    .ConfigureAwait(false);
-                var prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
+                // 握手（含 401 自动重新配对重试），与初次发送一致自动携带 Content-Length。
+                var (resp, secCtx) = await PostPrepareWithRepairAsync(task, baseUri, prepareReq, default).ConfigureAwait(false);
+                PrepareResponse? prep;
+                using (resp)
+                {
+                    if (!resp.IsSuccessStatusCode) { TryTransition(task, TransferState.Disconnected); return; }
+                    prep = await resp.Content.ReadFromJsonAsync<PrepareResponse>().ConfigureAwait(false);
+                }
                 if (prep is null || !prep.Accepted) { TryTransition(task, TransferState.Cancelled); return; }
                 await SendBatchAsync(task, baseUri, prep.ReceivedChunks ?? Array.Empty<int>(), secCtx, task.PauseCts.Token)
                     .ConfigureAwait(false);
@@ -575,6 +604,7 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         };
         _tasks[prepare.FileId] = task;
         _speeds[prepare.FileId] = new SpeedCalculator();
+        FtaTrace.Info("FTA.RECV", $"incoming<-{peer.DeviceName}({peer.IpAddress}) file='{prepare.FileName}' size={SpeedFormatter.FormatSize(prepare.FileSize)} fileId={prepare.FileId}");
         // 关键：必须用 SetState 更新 task.State，而非仅 EmitState。
         // 否则 task.State 仍为 Created，后续 WriteChunkAsync 的 SetState(WaitingApproval→Transferring) 会因条件不匹配而跳过。
         // 状态机要求 Created → Preparing → WaitingApproval 两步流转（与发送侧 StartSendAsync 一致），
@@ -799,6 +829,13 @@ public sealed class PipelinesTransferEngine : ITransferEngine
         if (TransferStateMachine.IsTerminal(to))
         {
             task.EndedUtc = DateTime.UtcNow;
+            // 每个任务结束只记一条摘要（含大小/用时/均速），替代"每切片一条"的高噪声日志
+            var durSec = (task.EndedUtc - task.StartedUtc).TotalSeconds;
+            var avgBps = durSec > 0.05 ? task.BytesTransferred / durSec : 0;
+            FtaTrace.Info("FTA.XFER",
+                $"{to} {task.Direction} file='{task.FileName}' size={SpeedFormatter.FormatSize(task.TotalBytes)} " +
+                $"moved={SpeedFormatter.FormatSize(task.BytesTransferred)} 用时={durSec:0.0}s 平均={SpeedFormatter.FormatSpeed(avgBps)}" +
+                (string.IsNullOrEmpty(task.ErrorMessage) ? string.Empty : $" err='{task.ErrorMessage}'"));
             _messenger.Send(new TransferCompletedMessage(
                 task.FileId, to == TransferState.Completed, task.ErrorMessage));
         }

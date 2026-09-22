@@ -28,7 +28,19 @@ public partial class LogsViewModel : ObservableObject
 
     [ObservableProperty] public partial bool HasLogs { get; set; }
 
-    public LogsViewModel(ILogFileProvider provider) => _provider = provider;
+    /// <summary>
+    /// 详细(Verbose)日志开关：默认关闭，避免大文件传输的"每切片/每请求"日志把文件撑大。
+    /// 打开后立即生效并持久化（重启仍生效），用于排查设备断联等疑难问题。
+    /// </summary>
+    [ObservableProperty] public partial bool VerboseEnabled { get; set; }
+
+    partial void OnVerboseEnabledChanged(bool value) => FtaTrace.SetVerbose(value);
+
+    public LogsViewModel(ILogFileProvider provider)
+    {
+        _provider = provider;
+        VerboseEnabled = FtaTrace.IsVerboseEnabled; // 同步当前状态
+    }
 
     [RelayCommand]
     private void Refresh() => Load();

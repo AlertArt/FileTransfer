@@ -68,6 +68,8 @@
   "LogsCopy": "复制",
   "LogsCopied": "已复制",
   "LogsEmpty": "暂无日志文件",
+  "LogsVerbose": "详细日志",
+  "LogsVerboseHint": "记录每个切片/请求的明细，用于排查断联等问题（日志量较大）",
   "About": "关于",
   "AboutTitle": "关于",
   "About.Version": "版本 {0}",

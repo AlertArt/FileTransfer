@@ -492,8 +492,9 @@ public class MainActivity : AvaloniaMainActivity
             if (string.IsNullOrEmpty(dir)) return;
             var path = Path.Combine(dir, "fta.trace.log");
             System.Diagnostics.Trace.AutoFlush = true;
+            // 带大小上限 + 轮转，避免大文件传输把日志撑大（约 1MB 轮转，保留 3 份备份）
             System.Diagnostics.Trace.Listeners.Add(
-                new System.Diagnostics.TextWriterTraceListener(path));
+                new FileTransferApp.Core.Diagnostics.RollingFileTraceListener(path, maxBytes: 1_000_000, maxBackups: 3));
             global::Android.Util.Log.Info("FTA.BOOT", $"fta.trace.log -> {path}");
         }
         catch (Exception ex)

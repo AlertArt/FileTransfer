@@ -342,10 +342,11 @@
                                             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                                                   ColumnSpacing="10" RowSpacing="5">
 
-                                                <!-- [缩略图 / 文件头像] -->
+                                                <!-- [缩略图 / 文件头像]：只跨"标题 + 元信息"两行，
+                                                     不再跨越进度行 —— 从结构上杜绝进度条压住缩略图 -->
                                                 <Border x:Name="ThumbArea"
                                                         Classes="ThumbArea"
-                                                        Grid.RowSpan="4"
+                                                        Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
                                                         CornerRadius="{DynamicResource Radius.Md}"
                                                         Background="{DynamicResource Brush.SurfaceAlt}"
                                                         ClipToBounds="True"
@@ -420,14 +421,15 @@
                                                                Foreground="{Binding State, Converter={StaticResource StatusToColor}}" />
                                                 </Grid>
 
-                                                <!-- [进度条] -->
-                                                <ProgressBar Grid.Row="2" Grid.Column="1"
+                                                <!-- [进度条]：整行跨越三列，位于缩略图下方，结构上不可能与缩略图重叠 -->
+                                                <ProgressBar Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                                             Height="8" VerticalAlignment="Center"
                                                              Minimum="0" Maximum="100"
                                                              Value="{Binding AnimatedProgress}"
                                                              IsVisible="{Binding !ShowWaitHint}" />
 
-                                                <!-- [进度信息行：百分比(左) + 速度(右)]，置于进度条下方，不再压叠在条上 -->
-                                                <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto,*"
+                                                <!-- [进度信息行：百分比(左) + 速度(右)]：整行 -->
+                                                <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" ColumnDefinitions="Auto,*"
                                                       IsVisible="{Binding !ShowWaitHint}">
                                                     <TextBlock Grid.Column="0"
                                                                Foreground="{DynamicResource Brush.TextPrimary}"
@@ -441,7 +443,7 @@
                                                 </Grid>
 
                                                 <!-- [等待审批/准备中提示行]：进度条与信息行后半段被此提示行整行替换 -->
-                                                <TextBlock Grid.Row="2" Grid.RowSpan="2" Grid.Column="1"
+                                                <TextBlock Grid.Row="2" Grid.RowSpan="2" Grid.Column="0" Grid.ColumnSpan="3"
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center"
                                                            Classes="Muted"
@@ -450,8 +452,8 @@
                                                            IsVisible="{Binding ShowWaitHint}" />
 
                                                 <!-- [错误提示行]：失败/断开/取消时显示错误原因（两套主题令牌）；仅占内容列，避免压到右侧按钮 -->
-                                                <Border Grid.Row="4" Grid.Column="1"
-                                                        Background="{DynamicResource Brush.ErrorBg}"
+                                                <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3"
+                                                         Background="{DynamicResource Brush.ErrorBg}"
                                                         BorderBrush="{DynamicResource Brush.ErrorBorder}"
                                                         BorderThickness="1"
                                                         CornerRadius="{DynamicResource Radius.Sm}"
@@ -464,9 +466,9 @@
                                                 </Border>
 
                                                 <!-- [操作按钮：暂停/恢复/取消/删除] -->
-                                                <StackPanel Grid.RowSpan="5" Grid.Column="2"
-                                                            Orientation="Horizontal" Spacing="2"
-                                                            VerticalAlignment="Center">
+                                                <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                                                             Orientation="Horizontal" Spacing="2"
+                                                             VerticalAlignment="Center">
                                                     <Button Classes="Icon" Content="⏸"
                                                             Command="{Binding PauseCommand}"
                                                             IsVisible="{Binding IsRunning}"

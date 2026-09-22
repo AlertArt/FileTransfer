@@ -68,6 +68,8 @@
   "LogsCopy": "Kopiuj",
   "LogsCopied": "Skopiowano",
   "LogsEmpty": "Nie znaleziono plików dziennika",
+  "LogsVerbose": "Szczegółowy dziennik",
+  "LogsVerboseHint": "Zapisuj szczegóły każdego fragmentu/żądania do diagnostyki (większy dziennik)",
   "About": "O aplikacji",
   "AboutTitle": "O aplikacji",
   "About.Version": "Wersja {0}",
