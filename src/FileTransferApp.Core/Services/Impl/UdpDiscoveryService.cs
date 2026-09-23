@@ -171,9 +171,15 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             node.LastSeenUtc = DateTime.UtcNow;
 
             bool isNew;
+            bool changed;
             lock (_lock)
             {
-                isNew = !_devices.ContainsKey(node.DeviceId);
+                isNew = !_devices.TryGetValue(node.DeviceId, out var prev);
+                // 已知设备的地址/端口/名称变化 → 需要通知 UI 就地刷新（否则列表会一直显示旧 IP）
+                changed = !isNew && prev is not null &&
+                          (!Equals(prev.IpAddress, node.IpAddress) ||
+                           prev.Port != node.Port ||
+                           !string.Equals(prev.DeviceName, node.DeviceName, StringComparison.Ordinal));
                 _devices[node.DeviceId] = node;
             }
 
@@ -181,6 +187,10 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             {
                 DeviceDiscovered?.Invoke(this, node);
                 _messenger.Send(new DeviceDiscoveredMessage(node));
+            }
+            else if (changed)
+            {
+                _messenger.Send(new DeviceUpdatedMessage(node));
             }
         }
     }

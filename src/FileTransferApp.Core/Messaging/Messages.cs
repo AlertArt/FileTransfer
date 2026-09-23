@@ -7,6 +7,9 @@ namespace FileTransferApp.Core.Messaging;
 public record DeviceDiscoveredMessage(DeviceNode Device);
 public record DeviceLostMessage(string DeviceId);
 
+/// <summary>已知设备的地址/名称发生变化（IP 漂移、重连、改名）。UI 据此就地刷新列表，避免显示陈旧 IP。</summary>
+public record DeviceUpdatedMessage(DeviceNode Device);
+
 // ---- 传输状态更新事件 ----
 public record TransferStatusChangedMessage(string FileId, TransferState NewState);
 

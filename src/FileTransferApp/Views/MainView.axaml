@@ -166,6 +166,13 @@
                                        Text="{svc:Localize Key=NearbyDevices}"
                                        Classes="Title"
                                        FontSize="16" />
+                            <Button DockPanel.Dock="Right"
+                                    Classes="Icon"
+                                    Content="🔗"
+                                    ToolTip.Tip="{svc:Localize Key=Connect.Title}"
+                                    Click="OnOpenConnectClick"
+                                    Margin="0,0,6,0"
+                                    VerticalAlignment="Center" />
                             <Border DockPanel.Dock="Right"
                                     Background="{DynamicResource Brush.Brand}"
                                     CornerRadius="{DynamicResource Radius.Pill}"

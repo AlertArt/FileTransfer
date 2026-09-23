@@ -16,6 +16,9 @@
 
         <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 
+        <!-- 连接码二维码生成（纯托管，跨平台；仅用编码 BitMatrix，不依赖 System.Drawing） -->
+        <PackageVersion Include="ZXing.Net" Version="0.16.9" />
+
         <!-- Windows 系统 Toast 通知（桌面 head，仅 net10.0-windows 目标） -->
         <PackageVersion Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
         <!-- 覆盖 Toast 工具包传递引入的 System.Drawing.Common 4.7.0（存在已知漏洞 NU1904） -->

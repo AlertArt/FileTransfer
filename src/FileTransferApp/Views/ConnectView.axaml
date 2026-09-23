@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:FileTransferApp.ViewModels"
+             xmlns:svc="using:FileTransferApp.Services"
+             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="560"
+             x:Class="FileTransferApp.Views.ConnectView"
+             x:DataType="vm:ConnectViewModel">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="12">
+
+            <!-- 本机连接码二维码 -->
+            <TextBlock Text="{svc:Localize Key=Connect.ScanTitle}" Classes="Title" />
+            <TextBlock Text="{svc:Localize Key=Connect.ScanHint}" Classes="Muted" TextWrapping="Wrap" />
+
+            <Border Classes="Card" Padding="16">
+                <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <Image Source="{Binding QrImage}"
+                           Width="220" Height="220"
+                           Stretch="Uniform"
+                           HorizontalAlignment="Center" />
+                    <SelectableTextBlock Text="{Binding SelfCode}"
+                                         FontFamily="Consolas, Cascadia Mono, Courier New, monospace"
+                                         FontSize="11"
+                                         TextWrapping="Wrap"
+                                         MaxWidth="280"
+                                         HorizontalAlignment="Center" />
+                    <Button Content="{svc:Localize Key=Connect.Copy}"
+                            Click="OnCopyClick"
+                            HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- 导入对方连接码 -->
+            <Border Classes="Card" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{svc:Localize Key=Connect.ImportTitle}" Classes="Subtitle" />
+                    <TextBox Text="{Binding ImportCode}"
+                             Watermark="{svc:Localize Key=Connect.ImportPlaceholder}" />
+                    <Button Classes="Primary"
+                            Content="{svc:Localize Key=Connect.Import}"
+                            Command="{Binding ImportCommand}"
+                            HorizontalAlignment="Right" />
+                    <TextBlock Text="{Binding StatusHint}"
+                               Classes="Muted"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

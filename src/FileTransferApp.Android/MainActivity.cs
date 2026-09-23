@@ -22,6 +22,12 @@ namespace FileTransferApp.Android;
     MainLauncher = true,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode,
     ScreenOrientation = global::Android.Content.PM.ScreenOrientation.Portrait)]
+// 连接码深链：系统相机/扫码器扫到 fta://connect?... 二维码时唤起本应用完成配对
+[IntentFilter(
+    new[] { Intent.ActionView },
+    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
+    DataScheme = "fta",
+    DataHost = "connect")]
 public class MainActivity : AvaloniaMainActivity
 {
     private const int NotificationPermissionRequestCode = 1001;
@@ -119,6 +125,64 @@ public class MainActivity : AvaloniaMainActivity
         if (hasFocus)
         {
             SetupEdgeToEdgeSystemBars();
+        }
+    }
+
+    /// <summary>应用已在运行时通过深链再次唤起：Intent 走这里。</summary>
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        Intent = intent;
+        TryHandleConnectIntent(intent);
+    }
+
+    /// <summary>冷启动经深链打开时，launch intent 在 OnResume 处理（此时 Avalonia 已初始化）。</summary>
+    protected override void OnResume()
+    {
+        base.OnResume();
+        TryHandleConnectIntent(Intent);
+    }
+
+    /// <summary>
+    /// 处理 <c>fta://connect?...</c> 连接码深链：解析为设备节点并在设备列表中添加/选中。
+    /// 用于"用系统相机扫描连接码二维码 → 唤起本应用即完成配对"。
+    /// </summary>
+    private void TryHandleConnectIntent(Intent? intent)
+    {
+        try
+        {
+            var data = intent?.Data?.ToString();
+            if (string.IsNullOrEmpty(data) ||
+                !data.StartsWith("fta://", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (!FileTransferApp.Core.Protocols.ConnectionCode.TryParse(data, out var node) || node is null)
+            {
+                global::Android.Util.Log.Warn("FTA.PAIR", $"deep link: 无法解析连接码: {data}");
+                return;
+            }
+
+            global::Android.Util.Log.Info("FTA.PAIR",
+                $"deep link connect code -> {node.DeviceName} {node.IpAddress}:{node.Port}");
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    var vm = FileTransferApp.Services.ServiceLocator.Services
+                        ?.GetService(typeof(FileTransferApp.ViewModels.MainViewModel))
+                        as FileTransferApp.ViewModels.MainViewModel;
+                    vm?.Devices.AddOrSelectManual(node);
+                }
+                catch (Exception ex)
+                {
+                    global::Android.Util.Log.Warn("FTA.PAIR", $"deep link apply failed: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.PAIR", $"deep link handle failed: {ex.Message}");
         }
     }
 

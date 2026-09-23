@@ -32,4 +32,24 @@ public partial class DeviceNodeViewModel : ObservableObject
     public bool IsOnline(TimeSpan? offlineAfter = null) => Device.IsOnline(offlineAfter);
 
     public string EndPoint => Device.EndPoint;
+
+    /// <summary>
+    /// 用发现层的最新节点信息**就地**刷新被包装的 Device（IP 漂移/重连/改名）。
+    /// 就地更新（而非替换对象）很关键：传输任务的 Peer 引用与本 VM 的 Device 是同一对象，
+    /// 就地刷新可让"旧任务重试"也拿到新地址。
+    /// </summary>
+    public void ApplyUpdate(DeviceNode latest)
+    {
+        Device.IpAddress = latest.IpAddress;
+        if (latest.Port > 0) Device.Port = latest.Port;
+        if (!string.IsNullOrEmpty(latest.DeviceName)) Device.DeviceName = latest.DeviceName;
+        Device.ProtocolVersion = latest.ProtocolVersion;
+        Device.LastSeenUtc = latest.LastSeenUtc;
+
+        OnPropertyChanged(nameof(IpAddress));
+        OnPropertyChanged(nameof(EndPoint));
+        OnPropertyChanged(nameof(Port));
+        OnPropertyChanged(nameof(DeviceName));
+        OnPropertyChanged(nameof(DeviceType));
+    }
 }

@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
 using FileTransferApp.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -249,6 +250,20 @@ public partial class MainView : UserControl
     {
         if (_aboutView is null) _aboutView = new AboutView();
         ShowOverlay(LocalizationService.Instance.GetString("AboutTitle"), _aboutView);
+    }
+
+    /// <summary>附近设备标题栏的"连接码"入口：展示本机二维码，并支持粘贴导入对方连接码。</summary>
+    private void OnOpenConnectClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var discovery = ServiceLocator.Services?.GetService<IDiscoveryService>();
+        if (discovery is null) return;
+        var selfIp = MainViewModel.GetLanIPv4Addresses().FirstOrDefault() ?? string.Empty;
+        var view = new ConnectView
+        {
+            DataContext = new ConnectViewModel(vm.Devices, discovery.Self, selfIp),
+        };
+        ShowOverlay(LocalizationService.Instance.GetString("Connect.Title"), view);
     }
 
     private void OnCloseOverlayClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

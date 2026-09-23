@@ -18,6 +18,7 @@ namespace FileTransferApp.ViewModels;
 /// </summary>
 public partial class DeviceListViewModel : ObservableObject,
     IRecipient<DeviceDiscoveredMessage>,
+    IRecipient<DeviceUpdatedMessage>,
     IRecipient<DeviceLostMessage>,
     IRecipient<TransferCompletedMessage>
 {
@@ -79,6 +80,35 @@ public partial class DeviceListViewModel : ObservableObject,
                 });
             }
         });
+    }
+
+    public void Receive(DeviceUpdatedMessage message)
+    {
+        // 已知设备 IP/端口/名称变化 → 就地刷新，避免列表显示陈旧地址
+        Dispatcher.UIThread.Post(() =>
+        {
+            var existing = Devices.FirstOrDefault(d => d.DeviceId == message.Device.DeviceId);
+            existing?.ApplyUpdate(message.Device);
+        });
+    }
+
+    /// <summary>
+    /// 添加（或就地刷新）一个手动/二维码导入的设备节点并选中它。
+    /// 供"手动直连兜底"与"连接码导入"复用；已存在则刷新地址并选中。
+    /// </summary>
+    public void AddOrSelectManual(DeviceNode node)
+    {
+        var existing = Devices.FirstOrDefault(d => d.DeviceId == node.DeviceId);
+        if (existing is null)
+        {
+            existing = new DeviceNodeViewModel(node);
+            Devices.Add(existing);
+        }
+        else
+        {
+            existing.ApplyUpdate(node);
+        }
+        SelectedDevice = existing;
     }
 
     public void Receive(DeviceLostMessage message)
