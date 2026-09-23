@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -204,9 +205,54 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         try { await _client!.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Parse(ProtocolConstants.MulticastGroup), ProtocolConstants.DiscoveryPort)).ConfigureAwait(false); }
         catch { /* 多播失败忽略 */ }
 
-        // 2) 广播（兼容不支持多播的 WiFi 网络，如大部分家用路由器）
-        try { await _client!.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Broadcast, ProtocolConstants.DiscoveryPort)).ConfigureAwait(false); }
-        catch { /* 广播失败忽略 */ }
+        // 2) 广播：受限广播 + 各网卡子网定向广播。
+        //    多网卡主机（WiFi + 以太网 + 虚拟/VPN 网卡，Windows 常见）下，仅发 255.255.255.255
+        //    可能按默认路由走错接口，导致对端收不到——典型症状"对端能看到我、我看不到对端"。
+        //    这里对每块活动网卡广播其子网地址（如 192.168.1.255）兜底。
+        foreach (var target in GetBroadcastTargets())
+        {
+            try { await _client!.SendAsync(bytes, bytes.Length, new IPEndPoint(target, ProtocolConstants.DiscoveryPort)).ConfigureAwait(false); }
+            catch { /* 单个目标失败忽略 */ }
+        }
+    }
+
+    private IPAddress[] _broadcastTargets = Array.Empty<IPAddress>();
+    private long _broadcastTargetsTick;
+
+    /// <summary>受限广播(255.255.255.255) + 各活动网卡的子网定向广播地址；结果缓存 30s。</summary>
+    private IPAddress[] GetBroadcastTargets()
+    {
+        var now = Environment.TickCount64;
+        if (_broadcastTargets.Length > 0 && now - _broadcastTargetsTick < 30_000)
+            return _broadcastTargets;
+
+        var list = new List<IPAddress> { IPAddress.Broadcast };
+        try
+        {
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != OperationalStatus.Up) continue;
+                if (ni.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) continue;
+
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    if (ua.IPv4Mask is null || ua.IPv4Mask.GetAddressBytes().Length != 4) continue;
+
+                    var ip = ua.Address.GetAddressBytes();
+                    var mask = ua.IPv4Mask.GetAddressBytes();
+                    var b = new byte[4];
+                    for (var i = 0; i < 4; i++) b[i] = (byte)(ip[i] | (mask[i] ^ 255));
+                    var addr = new IPAddress(b);
+                    if (!list.Contains(addr)) list.Add(addr);
+                }
+            }
+        }
+        catch { /* 枚举失败退化为仅受限广播 */ }
+
+        _broadcastTargets = list.ToArray();
+        _broadcastTargetsTick = now;
+        return _broadcastTargets;
     }
 
     private async Task SendHeartbeatToAsync(IPEndPoint target)

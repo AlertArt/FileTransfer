@@ -46,21 +46,10 @@ namespace FileTransferApp.Android
                 global::Android.Util.Log.Error("FTA.BOOT", "Application.OnCreate: ConfigureServices FAIL: " + ex.Message);
             }
 
-            // 获取 WiFi MulticastLock，确保能接收 UDP 多播包（Android 默认过滤多播）
-            try
-            {
-                var wifiManager = (global::Android.Net.Wifi.WifiManager?)GetSystemService(global::Android.Content.Context.WifiService);
-                if (wifiManager is not null)
-                {
-                    var multicastLock = wifiManager.CreateMulticastLock("FileTransferApp_Discovery");
-                    if (multicastLock is not null) multicastLock.Acquire();
-                    global::Android.Util.Log.Info("FTA.BOOT", "MulticastLock acquired OK");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                global::Android.Util.Log.Warn("FTA.BOOT", "MulticastLock failed: " + ex.Message);
-            }
+            // 获取 WiFi MulticastLock，确保能接收 UDP 多播/广播（Android 默认过滤）。
+            // 【关键】锁对象必须由静态字段持有：若只放在局部变量里，会被 GC 回收 → 锁随之释放，
+            // 表现为"本机能发心跳（对方能看到我），但收不到对方心跳（我看不到对方）"。
+            AcquireMulticastLock();
 
             // 启动前台保活服务，防止 Android 后台杀进程导致 UDP/HTTP 服务中断
             try
@@ -77,6 +66,30 @@ namespace FileTransferApp.Android
             }
 
             base.OnCreate();
+        }
+
+        /// <summary>WiFi 多播锁：必须由静态字段持有，避免被 GC 回收导致锁失效（收不到对方心跳）。</summary>
+        private static global::Android.Net.Wifi.WifiManager.MulticastLock? _multicastLock;
+
+        /// <summary>获取/维持 WiFi 多播锁（幂等；WiFi 重连后再次调用可重新持有）。</summary>
+        private void AcquireMulticastLock()
+        {
+            try
+            {
+                var wifiManager = (global::Android.Net.Wifi.WifiManager?)GetSystemService(global::Android.Content.Context.WifiService);
+                if (wifiManager is null) return;
+
+                _multicastLock ??= wifiManager.CreateMulticastLock("FileTransferApp_Discovery");
+                if (_multicastLock is null) return;
+
+                _multicastLock.SetReferenceCounted(false);
+                if (!_multicastLock.IsHeld) _multicastLock.Acquire();
+                global::Android.Util.Log.Info("FTA.BOOT", $"MulticastLock acquired (held={_multicastLock.IsHeld})");
+            }
+            catch (System.Exception ex)
+            {
+                global::Android.Util.Log.Warn("FTA.BOOT", "MulticastLock failed: " + ex.Message);
+            }
         }
 
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
