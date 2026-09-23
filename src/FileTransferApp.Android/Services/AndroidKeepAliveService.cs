@@ -67,14 +67,15 @@ public sealed class AndroidKeepAliveService : IPlatformKeepAliveService
         }
     }
 
-    /// <summary>刷新通知文案 + 进度条（不重启服务，避免频闪）。progress 为 0..1，null 表示不显示进度条。</summary>
-    public void UpdateKeepAlive(string title, string content, double? progress)
+    /// <summary>刷新通知文案 + 进度条（不重启服务，避免频闪）。progress 为 0..1，null 表示不显示进度条。
+    /// fileId 非空时挂"暂停 / 取消"操作按钮。</summary>
+    public void UpdateKeepAlive(string title, string content, double? progress, string? fileId)
     {
         var percent = progress is { } p ? (int)Math.Round(p * 100) : -1;
-        TransferForegroundService.UpdateContent(_context, title, content, percent);
+        TransferForegroundService.UpdateContent(_context, title, content, percent, fileId);
     }
 
-    /// <summary>传输完成 / 失败：投放一次性状态通知（自动消失）。</summary>
-    public void ShowStatusNotification(string title, string content)
-        => TransferForegroundService.ShowStatusNotification(_context, title, content);
+    /// <summary>传输完成 / 失败：投放一次性状态通知（自动消失）；openPath 非空时挂"打开文件"按钮。</summary>
+    public void ShowStatusNotification(string title, string content, string? openPath)
+        => TransferForegroundService.ShowStatusNotification(_context, title, content, openPath);
 }

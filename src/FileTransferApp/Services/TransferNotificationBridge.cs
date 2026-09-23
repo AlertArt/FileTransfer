@@ -52,7 +52,8 @@ public sealed class TransferNotificationBridge :
         // 发送/接收用不同动词，方向取自任务（引擎任务在收尾前一直有效）
         var key = task.Direction == TransferDirection.Send ? "Notification.Transferring" : "Notification.Receiving";
         var content = LocalizationService.Instance.Format(key, task.FileName, pct, speed);
-        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, pct / 100.0);
+        // 带 fileId → Android 通知挂"暂停/取消"操作按钮
+        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, pct / 100.0, task.FileId);
     }
 
     public void Receive(TransferStatusChangedMessage message)
@@ -79,17 +80,22 @@ public sealed class TransferNotificationBridge :
         var task = _engine.GetTask(message.FileId);
         var name = task?.FileName ?? message.FileId;
         var title = LocalizationService.Instance.GetString("KeepAliveTitle");
+        // 完成通知的"打开文件"按钮仅在接收完成、且有本地路径时提供
+        var openPath = message.Success && task?.Direction == TransferDirection.Receive
+            ? task.LocalPath
+            : null;
+
         if (message.Success)
         {
             var size = SpeedFormatter.FormatSize(task?.TotalBytes ?? 0);
             _keepAlive.ShowStatusNotification(title,
-                LocalizationService.Instance.Format("Notification.Completed", name, size));
+                LocalizationService.Instance.Format("Notification.Completed", name, size), openPath);
         }
         else
         {
             var reason = ResolveError(task) ?? LocalizationService.Instance.GetString("State.Failed");
             _keepAlive.ShowStatusNotification(title,
-                LocalizationService.Instance.Format("Notification.Failed", name, reason));
+                LocalizationService.Instance.Format("Notification.Failed", name, reason), null);
         }
         _lastTick.Remove(message.FileId);
     }
@@ -100,7 +106,7 @@ public sealed class TransferNotificationBridge :
         var task = _engine.GetTask(fileId);
         if (task is null) return;
         var content = LocalizationService.Instance.Format(key, task.FileName);
-        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, null);
+        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, null, task.FileId);
     }
 
     private bool ShouldTick(string fileId)

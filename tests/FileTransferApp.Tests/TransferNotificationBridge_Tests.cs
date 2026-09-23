@@ -99,13 +99,13 @@ public class TransferNotificationBridge_Tests
 
         public void StartKeepAlive(string title, string content) { }
         public void StopKeepAlive() { }
-        public void UpdateKeepAlive(string title, string content, double? progress)
+        public void UpdateKeepAlive(string title, string content, double? progress, string? fileId)
         {
             UpdateCount++;
             LastContent = content;
             LastProgress = progress;
         }
-        public void ShowStatusNotification(string title, string content)
+        public void ShowStatusNotification(string title, string content, string? openPath)
         {
             StatusCount++;
             LastStatusContent = content;

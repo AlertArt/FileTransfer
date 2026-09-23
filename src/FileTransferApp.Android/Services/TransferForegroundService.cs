@@ -39,6 +39,13 @@ public sealed class TransferForegroundService : Service
     public const string ExtraTitle = "title";
     public const string ExtraContent = "content";
 
+    // 通知操作按钮（由 NotificationActionReceiver 处理）
+    public const string ActionPause = "com.CompanyName.FileTransferApp.action.PAUSE";
+    public const string ActionCancel = "com.CompanyName.FileTransferApp.action.CANCEL";
+    public const string ActionOpenFile = "com.CompanyName.FileTransferApp.action.OPEN_FILE";
+    public const string ExtraFileId = "fileId";
+    public const string ExtraOpenPath = "openPath";
+
     public override IBinder? OnBind(Intent? intent) => null;
 
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
@@ -99,12 +106,16 @@ public sealed class TransferForegroundService : Service
 
     /// <summary>更新前台通知：文案 + 可选进度条（0..100，负值表示不显示进度条）。</summary>
     public static void UpdateContent(Context context, string title, string content, int progressPercent)
+        => UpdateContent(context, title, content, progressPercent, null);
+
+    /// <summary>更新前台通知：文案 + 进度条 + 可选"暂停/取消"操作按钮（fileId 非空时挂按钮）。</summary>
+    public static void UpdateContent(Context context, string title, string content, int progressPercent, string? fileId)
     {
         s_currentTitle = title;
         s_currentContent = content;
         try
         {
-            var n = BuildNotificationSafe(context, title, content, progressPercent);
+            var n = BuildNotificationSafe(context, title, content, progressPercent, fileId);
             NotificationManagerCompat.From(context)!.Notify(NotificationId, n);
         }
         catch
@@ -123,7 +134,7 @@ public sealed class TransferForegroundService : Service
     /// 投放一次性「传输完成 / 失败」状态通知（自动消失，与保活通知互不影响）。
     /// 使用独立渠道（默认重要级，可有提示音）；点击回到 App。
     /// </summary>
-    public static void ShowStatusNotification(Context context, string title, string content)
+    public static void ShowStatusNotification(Context context, string title, string content, string? openPath)
     {
         try
         {
@@ -140,6 +151,13 @@ public sealed class TransferForegroundService : Service
                 .SetCategory(NotificationCompat.CategoryStatus);
             var intent = BuildContentIntent(context);
             if (intent is not null) builder = builder.SetContentIntent(intent);
+            // 完成通知：有本地路径时挂"打开文件"按钮
+            if (!string.IsNullOrEmpty(openPath))
+            {
+                var open = BuildAction(context, ActionOpenFile, ExtraOpenPath, openPath!, 103,
+                    LocalizationService.Instance.GetString("Notification.Open"));
+                if (open is not null) builder = builder.AddAction(open);
+            }
             NotificationManagerCompat.From(context)!.Notify(StatusNotificationId, builder.Build());
 #pragma warning restore CS8600, CS8602, CS8603
         }
@@ -258,7 +276,7 @@ public sealed class TransferForegroundService : Service
     ///   这样不同资源生成策略（大小写/命名）下都能命中，避免 compile-time 常量缺失。
     /// - 若资源 ID 映射失败，退回 Android 系统内置的 SymActionEmail / StatNotifySync 占位图标。
     /// </summary>
-    internal static Notification BuildNotificationSafe(Context context, string title, string content, int progressPercent = -1)
+    internal static Notification BuildNotificationSafe(Context context, string title, string content, int progressPercent = -1, string? fileId = null)
     {
         // AndroidX 绑定将 Java 流式 Builder 的构造与全链方法返回标注为可空，
         // 运行期必然非空；统一抑制 nullable 告警避免噪音。
@@ -294,8 +312,42 @@ public sealed class TransferForegroundService : Service
         var intent = BuildContentIntent(context);
         if (intent is not null) builder = builder.SetContentIntent(intent);
 
+        // 进行中通知：fileId 非空时挂"暂停 / 取消"操作按钮
+        if (!string.IsNullOrEmpty(fileId))
+        {
+            var pause = BuildAction(context, ActionPause, ExtraFileId, fileId!, 101,
+                LocalizationService.Instance.GetString("Notification.Pause"));
+            if (pause is not null) builder = builder.AddAction(pause);
+
+            var cancel = BuildAction(context, ActionCancel, ExtraFileId, fileId!, 102,
+                LocalizationService.Instance.GetString("Notification.Cancel"));
+            if (cancel is not null) builder = builder.AddAction(cancel);
+        }
+
         return builder.Build();
 #pragma warning restore CS8600, CS8602, CS8603
+    }
+
+    /// <summary>构造通知操作按钮的 PendingIntent（显式指向 NotificationActionReceiver）。</summary>
+    private static NotificationCompat.Action? BuildAction(Context context, string action, string extraKey, string extraValue, int requestCode, string title)
+    {
+        try
+        {
+            var intent = new Intent(context, typeof(NotificationActionReceiver));
+            intent.SetAction(action);
+            intent.PutExtra(extraKey, extraValue);
+            var flags = PendingIntentFlags.UpdateCurrent;
+            if (OperatingSystem.IsAndroidVersionAtLeast(23))
+                flags |= PendingIntentFlags.Immutable;
+            var pi = PendingIntent.GetBroadcast(context, requestCode, intent, flags);
+            if (pi is null) return null;
+            return new NotificationCompat.Action.Builder(0, title, pi).Build();
+        }
+        catch (Exception ex)
+        {
+            LogError("BuildAction", ex);
+            return null;
+        }
     }
 
     /// <summary>通知小图标：优先 app 的 alpha-only 矢量 ic_stat_notify，退回 app Icon，最后系统占位图标。</summary>

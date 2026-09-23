@@ -36,7 +36,7 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
     public void StartKeepAlive(string title, string content)
         => ShowOrUpdateTransfer(content, 0.0);
 
-    public void UpdateKeepAlive(string title, string content, double? progress)
+    public void UpdateKeepAlive(string title, string content, double? progress, string? fileId)
         => ShowOrUpdateTransfer(content, progress ?? 0.0);
 
     public void StopKeepAlive()
@@ -48,8 +48,9 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
         _lastSignature = string.Empty;
     }
 
-    public void ShowStatusNotification(string title, string content)
+    public void ShowStatusNotification(string title, string content, string? openPath)
     {
+        // 注：Windows Toast 的操作按钮需要激活回调（OnActivated）处理，暂未接入；openPath 先忽略。
         try
         {
             // 只保留一行正文：Windows 通知头部已显示应用名，再加标题行会重复。

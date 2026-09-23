@@ -366,7 +366,7 @@ public class TransferKeepAliveCoordinatorTests
             StopCallCount++;
         }
 
-        public void UpdateKeepAlive(string title, string content, double? progress)
+        public void UpdateKeepAlive(string title, string content, double? progress, string? fileId)
         {
             UpdateCallCount++;
             LastStartTitle = title;
@@ -374,7 +374,7 @@ public class TransferKeepAliveCoordinatorTests
             LastProgress = progress;
         }
 
-        public void ShowStatusNotification(string title, string content)
+        public void ShowStatusNotification(string title, string content, string? openPath)
         {
             StatusCallCount++;
             LastStatusTitle = title;

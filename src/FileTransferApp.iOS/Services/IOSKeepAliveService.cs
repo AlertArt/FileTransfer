@@ -62,13 +62,13 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     /// iOS 不支持像 Android 那样持续更新的前台通知；进行中状态保持 no-op，
     /// 避免与保活 alert 重复打扰用户。
     /// </summary>
-    public void UpdateKeepAlive(string title, string content, double? progress)
+    public void UpdateKeepAlive(string title, string content, double? progress, string? fileId)
     {
         // no-op：iOS 无持久通知栏进程级通知。
     }
 
     /// <summary>传输完成 / 失败：投放本地通知（首次会请求通知权限；未授权则静默忽略）。</summary>
-    public void ShowStatusNotification(string title, string content)
+    public void ShowStatusNotification(string title, string content, string? openPath)
     {
         try
         {
