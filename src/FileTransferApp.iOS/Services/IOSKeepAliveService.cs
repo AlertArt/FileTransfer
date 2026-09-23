@@ -21,10 +21,21 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     // 兜底前台提示文案：按照当前语言动态解析
     private static string DefaultContent => LocalizationService.Instance.GetString("KeepAliveForeground");
 
+    // 通知分类与"打开文件"操作
+    private const string CategoryId = "fta_status";
+    private const string OpenActionId = "fta_open";
+    private const string OpenPathKey = "openPath";
+    private static NotificationDelegate? _notificationDelegate;
+
     private nint? _backgroundTaskId;
     private bool _idleTimerOriginallyDisabled;
     // 平台无关的状态机：跟踪 Running / 文案回退 / 提示去重
     internal readonly KeepAliveStatus Status = new();
+
+    public IOSKeepAliveService()
+    {
+        EnsureNotificationSetup();
+    }
 
     public void StartKeepAlive(string title, string content)
     {
@@ -86,6 +97,13 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
                             Body = content,
                             Sound = UNNotificationSound.Default,
                         };
+                        // 完成且有本地路径：挂"打开文件"操作（路径随 UserInfo 携带）
+                        if (!string.IsNullOrEmpty(openPath))
+                        {
+                            notifContent.CategoryIdentifier = CategoryId;
+                            notifContent.UserInfo = NSDictionary.FromObjectAndKey(
+                                new NSString(openPath!), new NSString(OpenPathKey));
+                        }
                         var request = UNNotificationRequest.FromIdentifier(
                             Guid.NewGuid().ToString("N"), notifContent, null);
                         center.AddNotificationRequest(request, null);
@@ -110,6 +128,74 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
         try { UIApplication.SharedApplication.EndBackgroundTask(id); }
         catch { /* ignore */ }
         _backgroundTaskId = null;
+    }
+
+    /// <summary>注册通知分类（"打开文件"操作）并设置代理，处理前台展示与操作回调。</summary>
+    private static void EnsureNotificationSetup()
+    {
+        try
+        {
+            if (_notificationDelegate is not null) return;
+            var center = UNUserNotificationCenter.Current;
+
+            var open = UNNotificationAction.FromIdentifier(
+                OpenActionId,
+                LocalizationService.Instance.GetString("Notification.Open"),
+                UNNotificationActionOptions.Foreground);
+            var category = UNNotificationCategory.FromIdentifier(
+                CategoryId,
+                new[] { open },
+                Array.Empty<string>(),
+                UNNotificationCategoryOptions.None);
+            center.SetNotificationCategories(new NSSet<UNNotificationCategory>(new[] { category }));
+
+            _notificationDelegate = new NotificationDelegate();
+            center.Delegate = _notificationDelegate;
+        }
+        catch { /* 通知不可用不影响主流程 */ }
+    }
+
+    /// <summary>UNUserNotificationCenter 代理：前台展示横幅 + 处理"打开文件"操作。</summary>
+    private sealed class NotificationDelegate : UNUserNotificationCenterDelegate
+    {
+        public override void WillPresentNotification(
+            UNUserNotificationCenter center,
+            UNNotification notification,
+            Action<UNNotificationPresentationOptions> completionHandler)
+        {
+            // App 在前台时也展示横幅（否则完成通知不显示）
+            completionHandler(UNNotificationPresentationOptions.Banner | UNNotificationPresentationOptions.Sound);
+        }
+
+        public override void DidReceiveNotificationResponse(
+            UNUserNotificationCenter center,
+            UNNotificationResponse response,
+            Action completionHandler)
+        {
+            try
+            {
+                var action = response.ActionIdentifier;
+                if (action == OpenActionId)
+                {
+                    var path = response.Notification?.Request?.Content?.UserInfo?
+                        .ObjectForKey(new NSString(OpenPathKey))?.ToString();
+                    if (!string.IsNullOrEmpty(path))
+                        _ = OpenFileAsync(path!);
+                }
+            }
+            catch { /* ignore */ }
+            completionHandler();
+        }
+
+        private static async Task OpenFileAsync(string path)
+        {
+            try
+            {
+                if (ServiceLocator.Services?.GetService(typeof(IFileOpenService)) is IFileOpenService svc)
+                    await svc.OpenFileAsync(path).ConfigureAwait(false);
+            }
+            catch { /* 打开失败静默 */ }
+        }
     }
 
     /// <summary>在当前最上层 ViewController 上展示一次性 UIAlertController</summary>
