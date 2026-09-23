@@ -38,7 +38,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{svc:Localize Key=Connect.ImportTitle}" Classes="Subtitle" />
                     <TextBox Text="{Binding ImportCode}"
-                             Watermark="{svc:Localize Key=Connect.ImportPlaceholder}" />
+                             PlaceholderText="{svc:Localize Key=Connect.ImportPlaceholder}" />
                     <Button Classes="Primary"
                             Content="{svc:Localize Key=Connect.Import}"
                             Command="{Binding ImportCommand}"

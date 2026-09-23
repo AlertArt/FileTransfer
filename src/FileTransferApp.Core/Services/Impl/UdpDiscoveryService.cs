@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
+using FileTransferApp.Core.Diagnostics;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using FileTransferApp.Core.Messaging;
@@ -29,6 +30,12 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
     private Timer? _sweepTimer;
     private bool _disposed;
     private int _recvErrorStreak;
+    /// <summary>各来源最近一次单播回复的时间戳（抑制"收到即回复"造成的风暴）。</summary>
+    private readonly Dictionary<string, long> _lastReplyTick = new();
+    /// <summary>累计收到的 UDP 包数（诊断：为 0 说明根本没收到对方广播/多播）。</summary>
+    private long _recvCount;
+    /// <summary>接收循环 SocketException 次数（诊断：持续增长说明本端 socket 有问题）。</summary>
+    private int _socketErrCount;
 
     public DeviceNode Self { get; }
 
@@ -74,8 +81,17 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _client = new UdpClient(new IPEndPoint(IPAddress.Any, ProtocolConstants.DiscoveryPort));
         _client.EnableBroadcast = true;
-        try { _client.JoinMulticastGroup(IPAddress.Parse(ProtocolConstants.MulticastGroup)); }
-        catch { /* 多播受限环境降级：仍可手动直连 */ }
+        var joined = false;
+        try
+        {
+            _client.JoinMulticastGroup(IPAddress.Parse(ProtocolConstants.MulticastGroup));
+            joined = true;
+        }
+        catch (Exception ex)
+        {
+            FtaTrace.Warn("FTA.DISC", $"join multicast {ProtocolConstants.MulticastGroup} FAILED: {ex.Message}");
+        }
+        FtaTrace.Info("FTA.DISC", $"discovery socket bound 0.0.0.0:{ProtocolConstants.DiscoveryPort}, multicast={(joined ? "ON" : "OFF")}, broadcast=ON");
 
         _receiveTask = Task.Run(ReceiveLoopAsync, _cts.Token);
 
@@ -142,18 +158,24 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             {
                 result = await client.ReceiveAsync(token).ConfigureAwait(false);
                 _recvErrorStreak = 0;
+                _recvCount++;
+                if (_recvCount == 1)
+                    FtaTrace.Info("FTA.DISC", $"first UDP packet received from {result.RemoteEndPoint} ({result.Buffer.Length}B)");
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { continue; } // socket 被重建：下一轮取新实例
-            catch (SocketException)
+            catch (SocketException ex)
             {
+                if (++_socketErrCount <= 3)
+                    FtaTrace.Warn("FTA.DISC", $"receive SocketException #{_socketErrCount}: {ex.SocketErrorCode} {ex.Message}");
                 // 网络切换 / 底层 socket 失效：连续失败达阈值 → 重建并重新加入多播组
-                if (++_recvErrorStreak >= 5) { _recvErrorStreak = 0; TryRebindClient(); }
+                if (++_recvErrorStreak >= 5) { _recvErrorStreak = 0; FtaTrace.Warn("FTA.DISC", "rebinding discovery socket after repeated errors"); TryRebindClient(); }
                 try { await Task.Delay(200, token).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
                 continue;
             }
-            catch
+            catch (Exception ex)
             {
+                FtaTrace.Verbose("FTA.DISC", $"receive unexpected {ex.GetType().Name}: {ex.Message}");
                 if (++_recvErrorStreak >= 5) { _recvErrorStreak = 0; TryRebindClient(); }
                 continue;
             }
@@ -163,10 +185,18 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             {
                 node = JsonSerializer.Deserialize<DeviceNode>(result.Buffer);
             }
-            catch { continue; }
-            if (node is null) continue;
+            catch
+            {
+                FtaTrace.Verbose("FTA.DISC", $"drop bad-JSON from {result.RemoteEndPoint}");
+                continue;
+            }
+            if (node is null) { FtaTrace.Verbose("FTA.DISC", "drop null-node"); continue; }
             if (node.DeviceId == Self.DeviceId) continue;
-            if (IPAddress.IsLoopback(result.RemoteEndPoint.Address)) continue;
+            if (IPAddress.IsLoopback(result.RemoteEndPoint.Address))
+            {
+                FtaTrace.Verbose("FTA.DISC", $"drop loopback from {result.RemoteEndPoint}");
+                continue;
+            }
 
             node.IpAddress = result.RemoteEndPoint.Address;
             node.LastSeenUtc = DateTime.UtcNow;
@@ -184,8 +214,10 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
                 _devices[node.DeviceId] = node;
             }
 
+            FtaTrace.Verbose("FTA.DISC", $"recv {node.DeviceName} {node.IpAddress}:{node.Port} id={node.DeviceId} from {result.RemoteEndPoint}");
             if (isNew)
             {
+                FtaTrace.Info("FTA.DISC", $"discovered {node.DeviceName} {node.IpAddress}:{node.Port}");
                 DeviceDiscovered?.Invoke(this, node);
                 _messenger.Send(new DeviceDiscoveredMessage(node));
             }
@@ -193,6 +225,11 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             {
                 _messenger.Send(new DeviceUpdatedMessage(node));
             }
+
+            // 收到心跳后向来源【单播】回一次心跳：即使本端收不到对方的广播/多播，
+            // 对方也能通过"我方广播 → 对方收到 → 对方单播回我"这条路径发现本机（反之亦然）。
+            // 这能根治"一方能看到对方、另一方看不到"的单向发现不对称。
+            _ = MaybeReplyUnicastAsync(result.RemoteEndPoint);
         }
     }
 
@@ -252,6 +289,7 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
 
         _broadcastTargets = list.ToArray();
         _broadcastTargetsTick = now;
+        FtaTrace.Verbose("FTA.DISC", "broadcast targets: " + string.Join(", ", list.Select(a => a.ToString())));
         return _broadcastTargets;
     }
 
@@ -261,6 +299,27 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         var json = JsonSerializer.Serialize(Self);
         var bytes = Encoding.UTF8.GetBytes(json);
         await _client.SendAsync(bytes, bytes.Length, target).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 收到心跳后向来源单播回一次心跳（同一来源 2.5s 内最多回一次，避免双方互回形成风暴）。
+    /// 目的：广播/多播在部分设备/网络下只能单向送达；单播回复让"能发不能收"的一端也能被发现。
+    /// </summary>
+    private async Task MaybeReplyUnicastAsync(IPEndPoint remote)
+    {
+        try
+        {
+            var key = remote.ToString();
+            var now = Environment.TickCount64;
+            lock (_lastReplyTick)
+            {
+                if (_lastReplyTick.TryGetValue(key, out var last) && now - last < 2500) return;
+                _lastReplyTick[key] = now;
+            }
+            await SendHeartbeatToAsync(remote).ConfigureAwait(false);
+            FtaTrace.Verbose("FTA.DISC", $"unicast reply -> {remote}");
+        }
+        catch { /* 回复失败忽略 */ }
     }
 
     /// <summary>
@@ -304,6 +363,7 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         {
             foreach (var d in lost)
             {
+                FtaTrace.Info("FTA.DISC", $"lost {d.DeviceName} {d.IpAddress}");
                 DeviceLost?.Invoke(this, d.DeviceId);
                 _messenger.Send(new DeviceLostMessage(d.DeviceId));
             }
