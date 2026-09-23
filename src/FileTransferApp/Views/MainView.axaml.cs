@@ -222,6 +222,7 @@ public partial class MainView : UserControl
     private LogsView? _logsView;
     private AboutView? _aboutView;
     private SettingsView? _settingsView;
+    private HistoryView? _historyView;
 
     /// <summary>底栏齿轮：打开设置页（主题/语言/日志/关于 统一入口）。</summary>
     private void OnOpenSettingsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -229,9 +230,10 @@ public partial class MainView : UserControl
         if (_settingsView is null)
         {
             _settingsView = new SettingsView();
-            // 设置页内的"日志 / 关于"子入口，导航到对应子页面
+            // 设置页内的"传输历史 / 日志 / 关于"子入口，导航到对应子页面
             _settingsView.LogsRequested += (_, _) => OpenLogs();
             _settingsView.AboutRequested += (_, _) => OpenAbout();
+            _settingsView.HistoryRequested += (_, _) => OpenHistory();
         }
         ShowOverlay(LocalizationService.Instance.GetString("SettingsTitle"), _settingsView);
     }
@@ -250,6 +252,17 @@ public partial class MainView : UserControl
     {
         if (_aboutView is null) _aboutView = new AboutView();
         ShowOverlay(LocalizationService.Instance.GetString("AboutTitle"), _aboutView);
+    }
+
+    /// <summary>设置页"传输历史"子入口：展示持久化的终态任务快照。</summary>
+    private void OpenHistory()
+    {
+        var vm = ServiceLocator.Services.GetService<HistoryViewModel>();
+        if (vm is null) return;
+        vm.Load();
+        _historyView ??= new HistoryView();
+        _historyView.DataContext = vm;
+        ShowOverlay(LocalizationService.Instance.GetString("HistoryTitle"), _historyView);
     }
 
     /// <summary>附近设备标题栏的"连接码"入口：展示本机二维码，并支持粘贴导入对方连接码。</summary>

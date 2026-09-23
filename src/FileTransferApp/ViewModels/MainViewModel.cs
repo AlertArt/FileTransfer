@@ -30,6 +30,7 @@ public partial class MainViewModel : ObservableObject,
     private readonly IDiscoveryService _discovery;
     private readonly IFilePickerService _filePicker;
     private readonly TransferKeepAliveCoordinator _keepAlive;
+    private readonly ITransferHistoryStore _history;
 
     public DeviceListViewModel Devices { get; }
     public ObservableCollection<TransferItemViewModel> Transfers { get; } = new();
@@ -68,13 +69,15 @@ public partial class MainViewModel : ObservableObject,
         IDiscoveryService discovery,
         IFilePickerService filePicker,
         IPlatformKeepAliveService keepAlive,
-        IPairingService pairing)
+        IPairingService pairing,
+        ITransferHistoryStore history)
     {
         _messenger = messenger;
         _engine = engine;
         _discovery = discovery;
         _filePicker = filePicker;
         _keepAlive = new TransferKeepAliveCoordinator(keepAlive);
+        _history = history;
         Devices = new DeviceListViewModel(messenger, discovery, pairing);
         Transfers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTransfers));
 
@@ -129,6 +132,28 @@ public partial class MainViewModel : ObservableObject,
             _keepAlive.OnTaskCompleted(message.FileId, message.Success,
                 LocalizationService.Instance.GetString("KeepAliveTitle"),
                 LocalizationService.Instance.GetString("KeepAliveContent"));
+            PersistHistory(message.FileId);
+        });
+    }
+
+    /// <summary>把终态任务写入历史存储（App 重启后仍可在"传输历史"中查看）。</summary>
+    private void PersistHistory(string fileId)
+    {
+        var t = _engine.GetTask(fileId);
+        if (t is null) return;
+        _history.AddOrUpdate(new TransferHistoryEntry
+        {
+            FileId = t.FileId,
+            FileName = t.FileName,
+            Direction = t.Direction,
+            TotalBytes = t.TotalBytes,
+            BytesTransferred = t.BytesTransferred,
+            State = t.State,
+            LocalPath = t.LocalPath,
+            PeerName = t.Peer?.DeviceName,
+            StartedUtc = t.StartedUtc,
+            EndedUtc = t.EndedUtc,
+            ErrorMessage = t.ErrorMessage,
         });
     }
 

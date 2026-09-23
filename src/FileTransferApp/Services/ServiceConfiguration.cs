@@ -58,9 +58,13 @@ public static class ServiceConfiguration
         // 传输进度/状态 → 平台通知（Android 通知栏 / Windows Toast / iOS 本地通知）
         services.AddSingleton<TransferNotificationBridge>();
 
+        // 传输历史持久化（终态任务快照，重启后仍可查看）
+        services.AddSingleton<ITransferHistoryStore, JsonTransferHistoryStore>();
+
         // 根视图模型
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<LogsViewModel>();
+        services.AddSingleton<HistoryViewModel>();
 
         return services;
     }

@@ -19,6 +19,9 @@ public partial class SettingsView : UserControl
     /// <summary>用户点击"关于"。</summary>
     public event EventHandler? AboutRequested;
 
+    /// <summary>用户点击"传输历史"。</summary>
+    public event EventHandler? HistoryRequested;
+
     public SettingsView()
     {
         InitializeComponent();
@@ -94,4 +97,7 @@ public partial class SettingsView : UserControl
 
     private void OnAboutClick(object? sender, RoutedEventArgs e)
         => AboutRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnHistoryClick(object? sender, RoutedEventArgs e)
+        => HistoryRequested?.Invoke(this, EventArgs.Empty);
 }
