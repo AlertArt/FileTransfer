@@ -206,6 +206,13 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             lock (_lock)
             {
                 isNew = !_devices.TryGetValue(node.DeviceId, out var prev);
+                // 记录到达间隔（排查"发现→丢失→发现"抖动：能看出实际心跳间隔是否 > 阈值）
+                if (!isNew && prev is not null)
+                {
+                    var gapMs = (long)(node.LastSeenUtc - prev.LastSeenUtc).TotalMilliseconds;
+                    if (gapMs > ProtocolConstants.HeartbeatIntervalMs * 2)
+                        FtaTrace.Verbose("FTA.DISC", $"heartbeat gap {gapMs}ms from {node.DeviceName} ({node.DeviceId})");
+                }
                 // 已知设备的地址/端口/名称变化 → 需要通知 UI 就地刷新（否则列表会一直显示旧 IP）
                 changed = !isNew && prev is not null &&
                           (!Equals(prev.IpAddress, node.IpAddress) ||

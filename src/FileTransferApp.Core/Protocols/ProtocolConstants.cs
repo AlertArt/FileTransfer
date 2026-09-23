@@ -6,7 +6,9 @@ public static class ProtocolConstants
     // ---- 设备发现 (UDP) ----
     public const int DiscoveryPort = 53317;
     public const int HeartbeatIntervalMs = 3000;
-    public const int OfflineTimeoutMs = 10000;
+    // 离线判定阈值。放宽到 30s：Android 在 Wi-Fi 省电/组播受限下可能间歇性收不到广播，
+    // 10s 会导致"发现→丢失→发现"反复上下线；30s 可容忍约 10 次心跳丢失。
+    public const int OfflineTimeoutMs = 30000;
 
     /// <summary>协议版本：v1=明文；v2=设备配对 + AES-GCM 加密传输（向后兼容 v1 明文）。</summary>
     public const int ProtocolVersion = 2;
