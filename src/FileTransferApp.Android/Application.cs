@@ -31,7 +31,9 @@ namespace FileTransferApp.Android
                 ServiceConfiguration.BuildProvider(deviceName, Core.Models.DeviceType.Android, services =>
                 {
                     services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
-                    services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
+                    var storage = new AndroidStorageService(this);
+                    storage.CleanupStaleTempFiles(); // 启动清理上次会话残留的 .tmp
+                    services.AddSingleton<IStorageService>(storage);
                     services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
                     // 覆盖共享的 Avalonia 文件选择器：Android 需走原生 SAF（内部惰性取 MainActivity.Current）
                     services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());

@@ -51,6 +51,21 @@ public sealed class DesktopStorageService : IStorageService
         return Path.Combine(dir, "FileTransferApp");
     }
 
+    /// <summary>启动清理：删除上次会话遗留的 .tmp 临时文件（崩溃/强杀后残留，跨重启清理）。</summary>
+    public void CleanupStaleTempFiles()
+    {
+        try
+        {
+            var dir = GetDefaultReceiveDirectory();
+            if (!Directory.Exists(dir)) return;
+            foreach (var f in Directory.EnumerateFiles(dir, "*.tmp", SearchOption.TopDirectoryOnly))
+            {
+                try { File.Delete(f); } catch { /* ignore */ }
+            }
+        }
+        catch { /* ignore */ }
+    }
+
     public bool FileExists(string path) => File.Exists(path);
 
     public async Task<string> ComputeSha256Async(string filePath)

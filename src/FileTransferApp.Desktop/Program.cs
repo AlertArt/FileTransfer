@@ -60,7 +60,9 @@ sealed class Program
         // 统一装配：平台服务在共享注册之后注册（可覆盖默认实现）
         ServiceConfiguration.BuildProvider(Environment.MachineName, DeviceType.Windows, services =>
         {
-            services.AddSingleton<IStorageService, DesktopStorageService>();
+            var storage = new DesktopStorageService();
+            storage.CleanupStaleTempFiles(); // 启动清理上次会话残留的 .tmp
+            services.AddSingleton<IStorageService>(storage);
             // Windows 系统 Toast 通知：传输进行中显示进度，完成/失败投放状态通知
             services.AddSingleton<IPlatformKeepAliveService, WindowsNotificationService>();
             services.AddSingleton<IFileOpenService, DesktopFileOpenService>();

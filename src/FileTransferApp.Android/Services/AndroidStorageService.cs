@@ -69,6 +69,23 @@ public sealed class AndroidStorageService : IStorageService
         });
     }
 
+    /// <summary>启动清理：删除上次会话遗留的 .tmp 临时文件（崩溃/强杀后残留，跨重启清理）。</summary>
+    public void CleanupStaleTempFiles()
+    {
+        foreach (var dir in new[] { GetDefaultReceiveDirectory(), GetFallbackReceiveDirectory() })
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+                foreach (var f in Directory.EnumerateFiles(dir, "*.tmp", SearchOption.TopDirectoryOnly))
+                {
+                    try { File.Delete(f); } catch { /* ignore */ }
+                }
+            }
+            catch { /* ignore */ }
+        }
+    }
+
     public string GetDefaultReceiveDirectory()
     {
         // 公共 Download 目录：用户可在文件管理器中直接查看接收到的文件
