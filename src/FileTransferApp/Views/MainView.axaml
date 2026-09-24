@@ -303,16 +303,32 @@
                         Classes="Card">
                     <DockPanel LastChildFill="True">
                         <!-- 标题 + 提示 -->
-                        <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="0,0,0,10">
+                        <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left"
                                        Text="{svc:Localize Key=TransferTasks}"
                                        Classes="Title"
-                                       FontSize="16" />
-                            <TextBlock DockPanel.Dock="Right"
-                                       Text="{svc:Localize Key=DragDropHint}"
-                                       Classes="Muted"
-                                       IsVisible="{Binding !IsCompact}"
+                                       FontSize="16"
                                        VerticalAlignment="Center" />
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal" Spacing="6"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{svc:Localize Key=DragDropHint}"
+                                           Classes="Muted"
+                                           IsVisible="{Binding !IsCompact}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding OverallProgress, StringFormat='{}{0:0} %'}"
+                                           Classes="Muted"
+                                           IsVisible="{Binding HasActive}"
+                                           VerticalAlignment="Center" />
+                                <Button Classes="Icon" Content="⏸"
+                                        ToolTip.Tip="{svc:Localize Key=PauseAll}"
+                                        Command="{Binding PauseAllCommand}"
+                                        IsVisible="{Binding HasActive}" />
+                                <Button Classes="Icon" Content="▶"
+                                        ToolTip.Tip="{svc:Localize Key=ResumeAll}"
+                                        Command="{Binding ResumeAllCommand}"
+                                        IsVisible="{Binding HasPaused}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <!-- +++++ 传输列表内容区：空态提示 + 列表 +++++ -->

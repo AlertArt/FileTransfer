@@ -25,6 +25,8 @@
   "Retry": "Ponów",
   "Cancel": "Anuluj",
   "DeleteTask": "Usuń zadanie",
+  "PauseAll": "Wstrzymaj wszystko",
+  "ResumeAll": "Wznów wszystko",
   "State.Created": "Utworzono",
   "State.Preparing": "Uzgadnianie",
   "State.WaitingApproval": "Oczekiwanie",

@@ -25,6 +25,8 @@
   "Retry": "Retry",
   "Cancel": "Cancel",
   "DeleteTask": "Delete task",
+  "PauseAll": "Pause all",
+  "ResumeAll": "Resume all",
   "State.Created": "Created",
   "State.Preparing": "Handshaking",
   "State.WaitingApproval": "Waiting",

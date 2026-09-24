@@ -22,6 +22,7 @@ namespace FileTransferApp.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject,
     IRecipient<TransferStatusChangedMessage>,
+    IRecipient<TransferProgressMessage>,
     IRecipient<TransferCompletedMessage>,
     IRecipient<TransferTaskRemovedMessage>
 {
@@ -37,6 +38,16 @@ public partial class MainViewModel : ObservableObject,
 
     /// <summary>传输列表是否为空（供 XAML 空态提示切换）。</summary>
     public bool HasTransfers => Transfers.Count > 0;
+
+    /// <summary>进行中（非终态）任务数。</summary>
+    [ObservableProperty] public partial int ActiveCount { get; set; }
+    /// <summary>是否存在进行中任务（控制"全部暂停/总进度"显隐）。</summary>
+    [ObservableProperty] public partial bool HasActive { get; set; }
+    /// <summary>是否存在已暂停任务（控制"全部恢复"显隐）。</summary>
+    [ObservableProperty] public partial bool HasPaused { get; set; }
+    /// <summary>批量总进度（按字节加权，0-100；仅供参考）。</summary>
+    [ObservableProperty] public partial double OverallProgress { get; set; }
+    private long _lastAggregateTickMs;
 
     [ObservableProperty] public partial string SelfName { get; set; } = string.Empty;
     /// <summary>本机设备类型（"PC"/"Android"等，供"关于"页展示）</summary>
@@ -118,7 +129,53 @@ public partial class MainViewModel : ObservableObject,
             _keepAlive.OnTaskStateChanged(message.FileId, message.NewState,
                 LocalizationService.Instance.GetString("KeepAliveTitle"),
                 LocalizationService.Instance.GetString("KeepAliveContent"));
+            RefreshAggregate();
         });
+    }
+
+    /// <summary>实时进度 → 刷新批量聚合（限频 500ms，避免高频重算）。</summary>
+    public void Receive(TransferProgressMessage message)
+    {
+        var now = Environment.TickCount64;
+        if (now - _lastAggregateTickMs < 500) return;
+        _lastAggregateTickMs = now;
+        Dispatcher.UIThread.Post(RefreshAggregate);
+    }
+
+    /// <summary>重算"进行中数量 / 总进度 / 暂停态"聚合（供标题栏展示与按钮显隐）。</summary>
+    private void RefreshAggregate()
+    {
+        long total = 0, done = 0;
+        var active = 0;
+        var paused = 0;
+        foreach (var t in Transfers)
+        {
+            if (t.IsTerminal) continue;
+            active++;
+            if (t.IsPaused) paused++;
+            total += t.TotalBytes;
+            done += Math.Min(t.BytesTransferred, t.TotalBytes);
+        }
+        ActiveCount = active;
+        HasActive = active > 0;
+        HasPaused = paused > 0;
+        OverallProgress = total > 0 ? done * 100.0 / total : 0;
+    }
+
+    /// <summary>全部暂停（对所有进行中的任务）。</summary>
+    [RelayCommand]
+    private async Task PauseAllAsync()
+    {
+        foreach (var t in Transfers.ToList())
+            if (t.IsRunning) await _engine.PauseAsync(t.FileId).ConfigureAwait(false);
+    }
+
+    /// <summary>全部恢复（对所有已暂停的任务）。</summary>
+    [RelayCommand]
+    private async Task ResumeAllAsync()
+    {
+        foreach (var t in Transfers.ToList())
+            if (t.IsPaused) await _engine.ResumeAsync(t.FileId).ConfigureAwait(false);
     }
 
     public void Receive(TransferCompletedMessage message)
@@ -133,6 +190,7 @@ public partial class MainViewModel : ObservableObject,
                 LocalizationService.Instance.GetString("KeepAliveTitle"),
                 LocalizationService.Instance.GetString("KeepAliveContent"));
             PersistHistory(message.FileId);
+            RefreshAggregate();
         });
     }
 
@@ -240,6 +298,7 @@ public partial class MainViewModel : ObservableObject,
         var task = _engine.GetTask(fileId);
         if (task is null) return;
         Transfers.Insert(0, new TransferItemViewModel(_messenger, _engine, task));
+        RefreshAggregate();
     }
 
     /// <summary>枚举本机所有可达的 LAN IPv4（排除回环/APIPA/多播/链路本地/6to4）。
