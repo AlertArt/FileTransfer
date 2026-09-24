@@ -85,6 +85,31 @@ public sealed class TransferForegroundService : Service
         return StartCommandResult.Sticky; // 进程被杀后由系统自动重建，保持 UDP/HTTP 长驻可发现
     }
 
+    /// <summary>
+    /// 用户从最近任务划掉应用：安排一次服务重启，尽量保持后台发现/接收不中断。
+    /// 注意：Android 12+ 对"后台启动前台服务"有限制，可能失败；已全程 catch，失败不影响其它逻辑。
+    /// </summary>
+    public override void OnTaskRemoved(Intent? rootIntent)
+    {
+        try
+        {
+            var restart = new Intent(this, typeof(TransferForegroundService));
+            restart.SetPackage(PackageName);
+            var flags = PendingIntentFlags.OneShot;
+            if (OperatingSystem.IsAndroidVersionAtLeast(23)) flags |= PendingIntentFlags.Immutable;
+            var pi = PendingIntent.GetService(this, 1001, restart, flags);
+
+            var am = (AlarmManager?)GetSystemService(AlarmService);
+            am?.Set(AlarmType.ElapsedRealtime, SystemClock.ElapsedRealtime() + 1000, pi);
+            global::Android.Util.Log.Info("FTA.BOOT", "OnTaskRemoved: scheduled service restart");
+        }
+        catch (Exception ex)
+        {
+            LogError("OnTaskRemoved", ex);
+        }
+        base.OnTaskRemoved(rootIntent);
+    }
+
     public override void OnDestroy()
     {
         try

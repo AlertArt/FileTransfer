@@ -89,6 +89,7 @@
   "PairingEmpty": "No paired devices",
   "PairingClearAll": "Unpair all",
   "PairingPairedAt": "paired {0}",
+  "BatteryOptimization": "Ignore battery optimization (keep-alive)",
   "About": "About",
   "AboutTitle": "About",
   "About.Version": "Version {0}",

@@ -25,6 +25,9 @@ public static class ServiceConfiguration
         services.AddSingleton<ILocalizationService>(LocalizationService.Instance);
         services.AddSingleton<IThemeService>(ThemeService.Instance);
 
+        // 电池优化白名单：默认（桌面/iOS）恒为已豁免；Android 会覆盖为原生实现
+        services.AddSingleton<IBatteryOptimizationService>(NullBatteryOptimizationService.Instance);
+
         // 持久化存储与安全层：设备身份 + 配对记录 + 配对/加密协调
         services.AddSingleton<ISettingsStore, AppDataSettingsStore>();
         services.AddSingleton<IDeviceIdentityStore, DeviceIdentityStore>();

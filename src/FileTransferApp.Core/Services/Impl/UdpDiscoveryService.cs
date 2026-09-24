@@ -109,6 +109,14 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>网络切换后重建 socket 并重新加入多播组（供平台连接性回调调用）。</summary>
+    public async Task RestartAsync()
+    {
+        FtaTrace.Info("FTA.DISC", "restarting discovery (network change)");
+        await StopAsync().ConfigureAwait(false);
+        await StartAsync().ConfigureAwait(false);
+    }
+
     public async Task StopAsync()
     {
         if (_cts is null) return;

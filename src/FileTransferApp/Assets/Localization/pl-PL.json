@@ -89,6 +89,7 @@
   "PairingEmpty": "Brak sparowanych urządzeń",
   "PairingClearAll": "Odparuj wszystko",
   "PairingPairedAt": "sparowano {0}",
+  "BatteryOptimization": "Ignoruj optymalizację baterii (keep-alive)",
   "About": "O aplikacji",
   "AboutTitle": "O aplikacji",
   "About.Version": "Wersja {0}",

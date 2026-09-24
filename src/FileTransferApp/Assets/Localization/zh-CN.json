@@ -89,6 +89,7 @@
   "PairingEmpty": "暂无配对设备",
   "PairingClearAll": "全部解除",
   "PairingPairedAt": "配对于 {0}",
+  "BatteryOptimization": "忽略电池优化（保活）",
   "About": "关于",
   "AboutTitle": "关于",
   "About.Version": "版本 {0}",

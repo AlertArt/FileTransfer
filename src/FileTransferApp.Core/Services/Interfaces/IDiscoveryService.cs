@@ -25,6 +25,9 @@ public interface IDiscoveryService
     /// <summary>停止发现</summary>
     Task StopAsync();
 
+    /// <summary>重启发现（网络切换后重建 socket 并重新加入多播组）。Stop 与 Start 的组合。</summary>
+    Task RestartAsync();
+
     /// <summary>手动直连：直接向目标 IP:Port 发送一次本机心跳握手以触发对端加入列表</summary>
     Task<bool> ConnectDirectAsync(System.Net.IPAddress address, int port, CancellationToken ct = default);
 }

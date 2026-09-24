@@ -1,4 +1,5 @@
 using Android.App;
+using Android.Net;
 using Android.OS;
 using Android.Runtime;
 using Avalonia;
@@ -35,6 +36,8 @@ namespace FileTransferApp.Android
                     // 覆盖共享的 Avalonia 文件选择器：Android 需走原生 SAF（内部惰性取 MainActivity.Current）
                     services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());
                     services.AddSingleton<ILogFileProvider>(_ => new AndroidLogFileProvider());
+                    // 覆盖默认：Android 电池优化白名单（引导用户加入"不优化"名单保活）
+                    services.AddSingleton<IBatteryOptimizationService>(_ => new AndroidBatteryOptimizationService(this));
                 });
                 global::Android.Util.Log.Info("FTA.BOOT", "Application.OnCreate: ConfigureServices OK (before Avalonia App init)");
             }
@@ -47,6 +50,9 @@ namespace FileTransferApp.Android
             // 【关键】锁对象必须由静态字段持有：若只放在局部变量里，会被 GC 回收 → 锁随之释放，
             // 表现为"本机能发心跳（对方能看到我），但收不到对方心跳（我看不到对方）"。
             AcquireMulticastLock();
+
+            // 监听网络变化：WiFi 切换/重连后重获多播锁并重启发现服务（重建 socket + 重新加入多播组）
+            RegisterConnectivityCallback();
 
             // 启动前台保活服务，防止 Android 后台杀进程导致 UDP/HTTP 服务中断
             try
@@ -87,6 +93,53 @@ namespace FileTransferApp.Android
             {
                 global::Android.Util.Log.Warn("FTA.BOOT", "MulticastLock failed: " + ex.Message);
             }
+        }
+
+        /// <summary>注册默认网络回调：可用/丢失时触发 OnNetworkChanged。</summary>
+        private void RegisterConnectivityCallback()
+        {
+            try
+            {
+                var cm = (ConnectivityManager?)GetSystemService(ConnectivityService);
+                cm?.RegisterDefaultNetworkCallback(new ConnectivityCallback(this));
+            }
+            catch (System.Exception ex)
+            {
+                global::Android.Util.Log.Warn("FTA.BOOT", "register connectivity callback failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>网络变化：重获 WiFi 多播锁并重启发现服务（重建 socket + 重新加入多播组）。</summary>
+        private void OnNetworkChanged()
+        {
+            try
+            {
+                AcquireMulticastLock();
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var discovery = ServiceLocator.Services?.GetService<IDiscoveryService>();
+                        if (discovery is not null) await discovery.RestartAsync().ConfigureAwait(false);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        global::Android.Util.Log.Warn("FTA.BOOT", "restart discovery failed: " + ex.Message);
+                    }
+                });
+            }
+            catch (System.Exception ex)
+            {
+                global::Android.Util.Log.Warn("FTA.BOOT", "OnNetworkChanged failed: " + ex.Message);
+            }
+        }
+
+        private sealed class ConnectivityCallback : ConnectivityManager.NetworkCallback
+        {
+            private readonly Application _app;
+            public ConnectivityCallback(Application app) => _app = app;
+            public override void OnAvailable(Network network) => _app.OnNetworkChanged();
+            public override void OnLost(Network network) => _app.OnNetworkChanged();
         }
 
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)

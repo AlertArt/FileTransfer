@@ -20,6 +20,9 @@
 	<!-- Android 13 (API 33+): 前台通知需运行时申请 POST_NOTIFICATIONS -->
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+	<!-- Android 6+：引导用户把本应用加入电池优化白名单（后台保活） -->
+	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
 	<!-- 启动时注册 UDP 多播 socket（部分 ROM 需要开机常驻） -->
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

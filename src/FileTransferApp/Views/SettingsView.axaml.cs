@@ -2,7 +2,9 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FileTransferApp.Views;
 
@@ -106,4 +108,11 @@ public partial class SettingsView : UserControl
 
     private void OnPairingClick(object? sender, RoutedEventArgs e)
         => PairingRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>引导用户豁免电池优化（Android 生效；其它平台 no-op）。</summary>
+    private void OnBatteryClick(object? sender, RoutedEventArgs e)
+    {
+        try { ServiceLocator.Services.GetService<IBatteryOptimizationService>()?.RequestExemption(); }
+        catch { /* 引导失败忽略 */ }
+    }
 }
