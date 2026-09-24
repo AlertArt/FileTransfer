@@ -28,6 +28,9 @@ namespace FileTransferApp.Android;
     Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
     DataScheme = "fta",
     DataHost = "connect")]
+// 系统分享：从文件管理器/图库等"分享"文件到本应用即发送（Android 上的"拖拽发送"形态）
+[IntentFilter(new[] { Intent.ActionSend }, Categories = new[] { Intent.CategoryDefault }, DataMimeType = "*/*")]
+[IntentFilter(new[] { Intent.ActionSendMultiple }, Categories = new[] { Intent.CategoryDefault }, DataMimeType = "*/*")]
 public class MainActivity : AvaloniaMainActivity
 {
     private const int NotificationPermissionRequestCode = 1001;
@@ -134,13 +137,66 @@ public class MainActivity : AvaloniaMainActivity
         base.OnNewIntent(intent);
         Intent = intent;
         TryHandleConnectIntent(intent);
+        TryHandleSendIntent(intent);
     }
 
-    /// <summary>冷启动经深链打开时，launch intent 在 OnResume 处理（此时 Avalonia 已初始化）。</summary>
+    /// <summary>冷启动经深链/分享打开时，launch intent 在 OnResume 处理（此时 Avalonia 已初始化）。</summary>
     protected override void OnResume()
     {
         base.OnResume();
         TryHandleConnectIntent(Intent);
+        TryHandleSendIntent(Intent);
+    }
+
+    /// <summary>
+    /// 处理系统"分享"意图（ACTION_SEND / ACTION_SEND_MULTIPLE）：把分享进来的文件复制到应用缓存，
+    /// 交由主 VM 发送给当前选中的设备（无选中设备时静默忽略）。等价于桌面端的拖拽发送。
+    /// </summary>
+    private void TryHandleSendIntent(Intent? intent)
+    {
+        try
+        {
+            var action = intent?.Action;
+            if (action != Intent.ActionSend && action != Intent.ActionSendMultiple) return;
+
+            var uris = new List<global::Android.Net.Uri>();
+#pragma warning disable CA1422 // GetParcelableExtra 在 API33+ 过时，但仍向后兼容
+            if (action == Intent.ActionSend)
+            {
+                if (intent!.GetParcelableExtra(Intent.ExtraStream) is global::Android.Net.Uri single)
+                    uris.Add(single);
+            }
+            else
+            {
+                var list = intent!.GetParcelableArrayListExtra(Intent.ExtraStream);
+                if (list is not null)
+                {
+                    foreach (var item in list)
+                        if (item is global::Android.Net.Uri u) uris.Add(u);
+                }
+            }
+#pragma warning restore CA1422
+            if (uris.Count == 0) return;
+
+            var paths = new List<string>();
+            foreach (var uri in uris)
+            {
+                var path = MaterializePickedUri(uri);
+                if (path is not null) paths.Add(path);
+            }
+            if (paths.Count == 0) return;
+
+            global::Android.Util.Log.Info("FTA.FILE", $"share intent -> {paths.Count} file(s)");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var vm = FileTransferApp.Services.ServiceLocator.GetService<FileTransferApp.ViewModels.MainViewModel>();
+                if (vm is not null) _ = vm.SendFilesAsync(paths.ToArray());
+            });
+        }
+        catch (Exception ex)
+        {
+            global::Android.Util.Log.Warn("FTA.FILE", "share intent failed: " + ex.Message);
+        }
     }
 
     /// <summary>
