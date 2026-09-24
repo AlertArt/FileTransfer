@@ -32,6 +32,9 @@ public sealed class TransferForegroundService : Service
     public const string StatusChannelId = "filetransfer_status";
     public const int StatusNotificationId = 4205954; // "FT02" 自定义 ID
 
+    /// <summary>通知强调色 = 品牌紫 #6366F1（明暗主题下均协调）。</summary>
+    public const int BrandColor = unchecked((int)0xFF6366F1);
+
     // 当前通知文案：供 UpdateContent 静态调用保持上下文一致
     private static string? s_currentTitle;
     private static string? s_currentContent;
@@ -173,6 +176,7 @@ public sealed class TransferForegroundService : Service
                 .SetAutoCancel(true)
                 .SetOngoing(false)
                 .SetPriority(NotificationCompat.PriorityDefault)
+                .SetColor(BrandColor)
                 .SetCategory(NotificationCompat.CategoryStatus);
             var intent = BuildContentIntent(context);
             if (intent is not null) builder = builder.SetContentIntent(intent);
@@ -315,6 +319,7 @@ public sealed class TransferForegroundService : Service
                 .SetContentText(content)
                 .SetOngoing(true)
                 .SetPriority(NotificationCompat.PriorityLow)
+                .SetColor(BrandColor)
                 .SetCategory(NotificationCompat.CategoryService);
         }
         catch (Exception ex)
@@ -327,6 +332,7 @@ public sealed class TransferForegroundService : Service
                 .SetContentText(content)
                 .SetOngoing(true)
                 .SetPriority(NotificationCompat.PriorityLow)
+                .SetColor(BrandColor)
                 .SetCategory(NotificationCompat.CategoryService);
         }
 
