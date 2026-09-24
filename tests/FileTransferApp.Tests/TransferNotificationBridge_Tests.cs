@@ -18,7 +18,7 @@ public class TransferNotificationBridge_Tests
         var messenger = new WeakReferenceMessenger();
         var engine = new StubEngine();
         var keepAlive = new RecordingKeepAlive();
-        _ = new TransferNotificationBridge(messenger, engine, keepAlive);
+        _ = new TransferNotificationBridge(messenger, engine, keepAlive, LocalizationService.Instance);
         return (keepAlive, engine, messenger);
     }
 

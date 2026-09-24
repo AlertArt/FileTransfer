@@ -11,7 +11,7 @@ namespace FileTransferApp.Services;
 /// - Apply(preference) 持久化选择；InitializePersistedTheme() 在应用启动时恢复
 /// - 与 LocalizationService 相同的持久化目录（%LocalAppData%/FileTransferApp/theme.txt）
 /// </summary>
-public sealed class ThemeService : INotifyPropertyChanged
+public sealed class ThemeService : INotifyPropertyChanged, IThemeService
 {
     public static ThemeService Instance { get; } = new();
 

@@ -15,7 +15,7 @@ namespace FileTransferApp.Services;
 /// - 通过 this[key] 索引器获取字符串，缺失 key 时回退到默认语言，再缺失返回 key 本身
 /// - SetLanguage(code) 切换语言并触发 PropertyChanged，XAML 绑定自动刷新
 /// </summary>
-public sealed class LocalizationService : INotifyPropertyChanged
+public sealed class LocalizationService : INotifyPropertyChanged, ILocalizationService
 {
     public static LocalizationService Instance { get; } = new();
 

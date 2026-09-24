@@ -21,6 +21,10 @@ public static class ServiceConfiguration
         // 消息总线（单例弱引用）
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
 
+        // 单例服务以接口暴露（便于注入/测试；实现仍是进程级单例）
+        services.AddSingleton<ILocalizationService>(LocalizationService.Instance);
+        services.AddSingleton<IThemeService>(ThemeService.Instance);
+
         // 持久化存储与安全层：设备身份 + 配对记录 + 配对/加密协调
         services.AddSingleton<ISettingsStore, AppDataSettingsStore>();
         services.AddSingleton<IDeviceIdentityStore, DeviceIdentityStore>();

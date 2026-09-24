@@ -16,6 +16,7 @@ namespace FileTransferApp.Services;
 ///
 /// 生命周期：构造时即注册到消息总线；由 DI 以单例持有（<c>ServiceConfiguration</c>），
 /// 只需在启动时解析一次即可生效。
+/// 依赖通过 <see cref="ILocalizationService"/> 注入（不再直连静态单例，便于测试）。
 /// </summary>
 public sealed class TransferNotificationBridge :
     IRecipient<TransferProgressMessage>,
@@ -27,15 +28,18 @@ public sealed class TransferNotificationBridge :
 
     private readonly ITransferEngine _engine;
     private readonly IPlatformKeepAliveService _keepAlive;
+    private readonly ILocalizationService _localization;
     private readonly Dictionary<string, long> _lastTick = new();
 
     public TransferNotificationBridge(
         IMessenger messenger,
         ITransferEngine engine,
-        IPlatformKeepAliveService keepAlive)
+        IPlatformKeepAliveService keepAlive,
+        ILocalizationService localization)
     {
         _engine = engine;
         _keepAlive = keepAlive;
+        _localization = localization;
         messenger.RegisterAll(this);
     }
 
@@ -51,9 +55,9 @@ public sealed class TransferNotificationBridge :
         var speed = SpeedFormatter.FormatSpeed(message.SpeedBytesPerSecond);
         // 发送/接收用不同动词，方向取自任务（引擎任务在收尾前一直有效）
         var key = task.Direction == TransferDirection.Send ? "Notification.Transferring" : "Notification.Receiving";
-        var content = LocalizationService.Instance.Format(key, task.FileName, pct, speed);
+        var content = _localization.Format(key, task.FileName, pct, speed);
         // 带 fileId → Android 通知挂"暂停/取消"操作按钮
-        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, pct / 100.0, task.FileId);
+        _keepAlive.UpdateKeepAlive(_localization.GetString("KeepAliveTitle"), content, pct / 100.0, task.FileId);
     }
 
     public void Receive(TransferStatusChangedMessage message)
@@ -79,7 +83,7 @@ public sealed class TransferNotificationBridge :
     {
         var task = _engine.GetTask(message.FileId);
         var name = task?.FileName ?? message.FileId;
-        var title = LocalizationService.Instance.GetString("KeepAliveTitle");
+        var title = _localization.GetString("KeepAliveTitle");
         // 完成通知的"打开文件"按钮仅在接收完成、且有本地路径时提供
         var openPath = message.Success && task?.Direction == TransferDirection.Receive
             ? task.LocalPath
@@ -89,13 +93,13 @@ public sealed class TransferNotificationBridge :
         {
             var size = SpeedFormatter.FormatSize(task?.TotalBytes ?? 0);
             _keepAlive.ShowStatusNotification(title,
-                LocalizationService.Instance.Format("Notification.Completed", name, size), openPath);
+                _localization.Format("Notification.Completed", name, size), openPath);
         }
         else
         {
-            var reason = ResolveError(task) ?? LocalizationService.Instance.GetString("State.Failed");
+            var reason = ResolveError(task) ?? _localization.GetString("State.Failed");
             _keepAlive.ShowStatusNotification(title,
-                LocalizationService.Instance.Format("Notification.Failed", name, reason), null);
+                _localization.Format("Notification.Failed", name, reason), null);
         }
         _lastTick.Remove(message.FileId);
     }
@@ -105,8 +109,8 @@ public sealed class TransferNotificationBridge :
         if (!ShouldTick(fileId)) return;
         var task = _engine.GetTask(fileId);
         if (task is null) return;
-        var content = LocalizationService.Instance.Format(key, task.FileName);
-        _keepAlive.UpdateKeepAlive(LocalizationService.Instance.GetString("KeepAliveTitle"), content, null, task.FileId);
+        var content = _localization.Format(key, task.FileName);
+        _keepAlive.UpdateKeepAlive(_localization.GetString("KeepAliveTitle"), content, null, task.FileId);
     }
 
     private bool ShouldTick(string fileId)
@@ -118,11 +122,11 @@ public sealed class TransferNotificationBridge :
     }
 
     /// <summary>与 TransferItemViewModel 一致的错误本地化：优先 ErrorCode，其次 ErrorMessage。</summary>
-    private static string? ResolveError(TransferTaskInfo? t)
+    private string? ResolveError(TransferTaskInfo? t)
     {
         if (t is null) return null;
-        if (!string.IsNullOrEmpty(t.ErrorCode) && LocalizationService.Instance.HasString(t.ErrorCode))
-            return LocalizationService.Instance.Format(t.ErrorCode, t.ErrorArgs ?? Array.Empty<object>());
+        if (!string.IsNullOrEmpty(t.ErrorCode) && _localization.HasString(t.ErrorCode))
+            return _localization.Format(t.ErrorCode, t.ErrorArgs ?? Array.Empty<object>());
         return string.IsNullOrEmpty(t.ErrorMessage) ? null : t.ErrorMessage;
     }
 }
