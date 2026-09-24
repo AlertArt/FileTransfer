@@ -16,6 +16,13 @@ public sealed class DeviceNode
     public int Port { get; set; }
     public int ProtocolVersion { get; set; } = ProtocolConstants.ProtocolVersion;
 
+    /// <summary>协议能力令牌（分号分隔，随心跳广播；见 <see cref="ProtocolCapabilities"/>）。
+    /// 向后兼容：旧端未携带时为空，视为不支持，功能自动降级。</summary>
+    public string? Capabilities { get; set; }
+
+    /// <summary>本节点是否支持指定能力。</summary>
+    public bool Supports(string capability) => ProtocolCapabilities.Supports(Capabilities, capability);
+
     /// <summary>对端 IP（运行时填充，不参与握手 JSON 序列化）</summary>
     [JsonIgnore]
     public IPAddress? IpAddress { get; set; }

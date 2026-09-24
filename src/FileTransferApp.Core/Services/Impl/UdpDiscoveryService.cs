@@ -55,6 +55,7 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             DeviceType = deviceType,
             Port = ProtocolConstants.TransferPort,
             ProtocolVersion = ProtocolConstants.ProtocolVersion,
+            Capabilities = ProtocolCapabilities.Self,
             IsSelf = true
         };
     }

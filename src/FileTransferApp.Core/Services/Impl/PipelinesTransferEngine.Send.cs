@@ -68,11 +68,12 @@ public sealed partial class PipelinesTransferEngine
         // 让任务卡片能立即出现在 UI 上（状态显示"握手中"），用户不再"选完文件傻等"。
         try
         {
-            // 首包延迟优化：v2 加密传输每片由 AES-GCM 保证完整性，无需发送前对整文件做 SHA-256
-            // （数百 MB~GB 的预哈希会把"开始传输"延迟数十秒）。仅对 v1 明文对端保留整文件预哈希。
-            var needFullHash = (task.Peer?.ProtocolVersion ?? 1) < ProtocolConstants.ProtocolVersion;
+            // 首包延迟优化：仅当对端**声明支持**"每片 AES-GCM 完整性"(chunk-gcm 能力) 时才跳过
+            // 整文件预哈希（数百 MB~GB 的预哈希会把"开始传输"延迟数十秒）。
+            // 能力协商保证向后兼容：对端未声明（旧端）→ 保留整文件预哈希。
+            var needFullHash = !(task.Peer?.Supports(ProtocolCapabilities.ChunkGcm) ?? false);
             if (!needFullHash)
-                FtaTrace.Info("FTA.SEND", $"skip full-file SHA256 (v2 encrypted peer) fileId={task.FileId}");
+                FtaTrace.Info("FTA.SEND", $"skip full-file SHA256 (peer supports chunk-gcm) fileId={task.FileId}");
 
             var (sha, thumb) = await Task.Run(async () =>
             {
