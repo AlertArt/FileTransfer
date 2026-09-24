@@ -1,0 +1,37 @@
+# EditorConfig — https://editorconfig.org
+# 目的：统一编码(UTF-8，防中文乱码)、缩进与换行；配合 `dotnet format` 做格式校验。
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+dotnet_sort_system_directives_first = true
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+[*.{axaml,xaml,xml,csproj,props,targets,slnx}]
+indent_style = space
+indent_size = 2
+end_of_line = crlf
+
+[*.json]
+indent_style = space
+indent_size = 2
+
+[*.{ps1,psm1}]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
