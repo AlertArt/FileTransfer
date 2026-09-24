@@ -32,13 +32,13 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
     {
         if (Interlocked.CompareExchange(ref _servicesConfigured, 1, 0) != 0) return;
 
-        var services = new ServiceCollection();
-        // iOS 平台服务：前台保活（熄屏禁用 + 后台任务标识 + 用户提示）+ 沙箱 Documents 存储
-        services.AddSingleton<IPlatformKeepAliveService, IOSKeepAliveService>();
-        services.AddSingleton<IStorageService, IOSStorageService>();
-        services.AddSingleton<IFileOpenService, IOSFileOpenService>();
-        services.AddFileTransferServices(GetDeviceName(), DeviceType.iOS);
-        ServiceLocator.Services = services.BuildServiceProvider();
+        // 统一装配：iOS 平台服务（前台保活 + 沙箱 Documents 存储 + 文件打开）
+        ServiceConfiguration.BuildProvider(GetDeviceName(), DeviceType.iOS, services =>
+        {
+            services.AddSingleton<IPlatformKeepAliveService, IOSKeepAliveService>();
+            services.AddSingleton<IStorageService, IOSStorageService>();
+            services.AddSingleton<IFileOpenService, IOSFileOpenService>();
+        });
     }
 
     private static string GetDeviceName()

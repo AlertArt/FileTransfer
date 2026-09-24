@@ -169,9 +169,7 @@ public class MainActivity : AvaloniaMainActivity
             {
                 try
                 {
-                    var vm = FileTransferApp.Services.ServiceLocator.Services
-                        ?.GetService(typeof(FileTransferApp.ViewModels.MainViewModel))
-                        as FileTransferApp.ViewModels.MainViewModel;
+                    var vm = FileTransferApp.Services.ServiceLocator.GetService<FileTransferApp.ViewModels.MainViewModel>();
                     vm?.Devices.AddOrSelectManual(node);
                 }
                 catch (Exception ex)

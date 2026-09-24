@@ -68,4 +68,29 @@ public static class ServiceConfiguration
 
         return services;
     }
+
+    /// <summary>
+    /// 共享的 DI 装配入口（各平台头统一调用，避免三份重复装配代码）：
+    /// 注册跨平台服务 → 注册平台服务（在共享注册之后，可覆盖默认实现）→ 构建 provider
+    /// → 赋值 <see cref="ServiceLocator.Services"/> → 预激活跨平台单例（通知桥）。
+    /// </summary>
+    public static IServiceProvider BuildProvider(
+        string deviceName,
+        DeviceType deviceType,
+        Action<IServiceCollection> configurePlatform)
+    {
+        var services = new ServiceCollection();
+        services.AddFileTransferServices(deviceName, deviceType);
+        // 平台服务放在共享注册之后：可覆盖共享默认实现（如 Android 覆盖 IFilePickerService）
+        configurePlatform(services);
+
+        var provider = services.BuildServiceProvider();
+        ServiceLocator.Services = provider;
+
+        // 预激活跨平台单例：构造即注册到消息总线（传输通知桥），保证各平台一致
+        try { provider.GetService<TransferNotificationBridge>(); }
+        catch { /* 激活失败不影响启动 */ }
+
+        return provider;
+    }
 }

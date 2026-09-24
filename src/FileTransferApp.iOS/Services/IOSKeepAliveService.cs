@@ -191,7 +191,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
         {
             try
             {
-                if (ServiceLocator.Services?.GetService(typeof(IFileOpenService)) is IFileOpenService svc)
+                if (ServiceLocator.GetService<IFileOpenService>() is { } svc)
                     await svc.OpenFileAsync(path).ConfigureAwait(false);
             }
             catch { /* 打开失败静默 */ }

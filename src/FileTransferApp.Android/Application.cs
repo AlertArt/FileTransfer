@@ -24,21 +24,18 @@ namespace FileTransferApp.Android
             // 此时 ServiceLocator.Services 必须已就绪，否则 MainView 无法同步绑定 → 空白界面。
             try
             {
-                var services = new ServiceCollection();
-                services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
-                services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
-                services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
                 var deviceName = "Android Device";
                 try { deviceName = Build.Model ?? "Android Device"; } catch { }
-                services.AddFileTransferServices(deviceName, Core.Models.DeviceType.Android);
-                // 覆盖共享注册：Android 文件选择/文件打开必须走原生实现。
-                // 【根因】此前这两项写在 MainActivity.ConfigureServices()，而真实 DI 在此方法内联构建，
-                // 导致 IFileOpenService 无注册（双击打开→GetRequiredService 抛异常→async void 外泄→闪退），
-                // 文件选择仍是共享的 AvaloniaFilePickerService（Android 上 StorageProvider 为 null → 窗口打不开）。
-                // AndroidFilePickerService 内部惰性取 MainActivity.Current，因此可在此处注册。
-                services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());
-                services.AddSingleton<ILogFileProvider>(_ => new AndroidLogFileProvider());
-                ServiceLocator.Services = services.BuildServiceProvider();
+                // 统一装配：平台服务在共享注册之后注册，可覆盖共享默认实现
+                ServiceConfiguration.BuildProvider(deviceName, Core.Models.DeviceType.Android, services =>
+                {
+                    services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
+                    services.AddSingleton<IStorageService>(_ => new AndroidStorageService(this));
+                    services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
+                    // 覆盖共享的 Avalonia 文件选择器：Android 需走原生 SAF（内部惰性取 MainActivity.Current）
+                    services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());
+                    services.AddSingleton<ILogFileProvider>(_ => new AndroidLogFileProvider());
+                });
                 global::Android.Util.Log.Info("FTA.BOOT", "Application.OnCreate: ConfigureServices OK (before Avalonia App init)");
             }
             catch (System.Exception ex)

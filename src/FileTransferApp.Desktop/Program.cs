@@ -57,16 +57,15 @@ sealed class Program
 
     private static void ConfigureServices()
     {
-        var services = new ServiceCollection();
-        // 平台特定服务
-        services.AddSingleton<IStorageService, DesktopStorageService>();
-        // Windows 系统 Toast 通知：传输进行中显示进度，完成/失败投放状态通知
-        services.AddSingleton<IPlatformKeepAliveService, WindowsNotificationService>();
-        services.AddSingleton<IFileOpenService, DesktopFileOpenService>();
-        services.AddSingleton<ILogFileProvider, DesktopLogFileProvider>();
-        // 跨平台核心 + UI 服务
-        services.AddFileTransferServices(Environment.MachineName, DeviceType.Windows);
-        ServiceLocator.Services = services.BuildServiceProvider();
+        // 统一装配：平台服务在共享注册之后注册（可覆盖默认实现）
+        ServiceConfiguration.BuildProvider(Environment.MachineName, DeviceType.Windows, services =>
+        {
+            services.AddSingleton<IStorageService, DesktopStorageService>();
+            // Windows 系统 Toast 通知：传输进行中显示进度，完成/失败投放状态通知
+            services.AddSingleton<IPlatformKeepAliveService, WindowsNotificationService>();
+            services.AddSingleton<IFileOpenService, DesktopFileOpenService>();
+            services.AddSingleton<ILogFileProvider, DesktopLogFileProvider>();
+        });
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
