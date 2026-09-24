@@ -54,9 +54,17 @@ public sealed partial class PipelinesTransferEngine
         // 让任务卡片能立即出现在 UI 上（状态显示"握手中"），用户不再"选完文件傻等"。
         try
         {
+            // 首包延迟优化：v2 加密传输每片由 AES-GCM 保证完整性，无需发送前对整文件做 SHA-256
+            // （数百 MB~GB 的预哈希会把"开始传输"延迟数十秒）。仅对 v1 明文对端保留整文件预哈希。
+            var needFullHash = (task.Peer?.ProtocolVersion ?? 1) < ProtocolConstants.ProtocolVersion;
+            if (!needFullHash)
+                FtaTrace.Info("FTA.SEND", $"skip full-file SHA256 (v2 encrypted peer) fileId={task.FileId}");
+
             var (sha, thumb) = await Task.Run(async () =>
             {
-                var hash = await _storage.ComputeSha256Async(task.LocalPath!).ConfigureAwait(false);
+                var hash = needFullHash
+                    ? await _storage.ComputeSha256Async(task.LocalPath!).ConfigureAwait(false)
+                    : string.Empty;
                 var thumbnail = await _thumbnail.GenerateThumbnailAsync(task.LocalPath!).ConfigureAwait(false);
                 return (hash, thumbnail);
             }, ct).ConfigureAwait(false);
@@ -256,6 +264,10 @@ public sealed partial class PipelinesTransferEngine
     /// 此前会被当作普通失败 → 永久 401、"怎么都连不上"。这里清除本地陈旧记录并重新走
     /// /security/pair 握手即可自愈。返回的 HttpResponseMessage 由调用方负责 Dispose。
     /// </summary>
+    /// <summary>/prepare 单独的超时（比 HttpClient.Timeout=30s 更短）：对端不可达时尽快失败，
+    /// 避免长时间占用 <c>_resuming</c> 单飞锁导致后续"重试/恢复"被静默忽略。</summary>
+    private const int PrepareTimeoutMs = 12000;
+
     private async Task<(HttpResponseMessage Response, PeerSecurityContext? SecCtx)> PostPrepareWithRepairAsync(
         TransferTaskInfo task, string baseUri, PrepareRequest prepareReq, CancellationToken ct)
     {
@@ -263,7 +275,10 @@ public sealed partial class PipelinesTransferEngine
         {
             var secCtx = await GetSendSecurityContextAsync(task).ConfigureAwait(false);
             using var content = BuildSecureContent(prepareReq, secCtx);
-            var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, ct).ConfigureAwait(false);
+            // 对 /prepare 施加更短超时（链接调用方 token）
+            using var prepareCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            prepareCts.CancelAfter(PrepareTimeoutMs);
+            var resp = await _http.PostAsync(baseUri + ProtocolConstants.PathPrepare, content, prepareCts.Token).ConfigureAwait(false);
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized && attempt == 0 && secCtx is not null
                 && !string.IsNullOrEmpty(task.Peer?.DeviceId))
@@ -316,7 +331,12 @@ public sealed partial class PipelinesTransferEngine
     {
         var from = task.State;
         if (from is not (TransferState.Paused or TransferState.Disconnected or TransferState.Failed)) return;
-        if (!_resuming.TryAdd(task.FileId, 0)) return;
+        if (!_resuming.TryAdd(task.FileId, 0))
+        {
+            // 同一任务已有续传链路在进行：忽略本次（有日志，不再静默）
+            FtaTrace.Info("FTA.SEND", $"resume/retry ignored (already in progress) fileId={task.FileId}");
+            return;
+        }
         try
         {
             task.PauseCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
