@@ -47,6 +47,20 @@ public sealed partial class PipelinesTransferEngine
     {
         if (_tasks.TryGetValue(fileId, out var task) is false) return;
 
+        // 发送并发上限：超过则排队等待（避免同时开启过多传输占满带宽/内存）
+        await _sendSlots.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await StartSendCoreAsync(task, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendSlots.Release();
+        }
+    }
+
+    private async Task StartSendCoreAsync(TransferTaskInfo task, CancellationToken ct)
+    {
         SetState(task, TransferState.Created, TransferState.Preparing);
 
         // Preparing 阶段：在后台线程计算 SHA-256 全文件哈希 + 生成缩略图。
@@ -210,6 +224,8 @@ public sealed partial class PipelinesTransferEngine
             var hash = ComputeChunkHash(buf, read);
             try
             {
+                // 带宽节流：达到上限时在此等待，保持平均速率
+                await _throttle.AcquireAsync(read, token).ConfigureAwait(false);
                 await PostChunkAsync(task, baseUri, idx, hash, buf, read, secCtx, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { break; }

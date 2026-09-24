@@ -42,6 +42,18 @@ public sealed partial class PipelinesTransferEngine : ITransferEngine
     private readonly ConcurrentDictionary<string, long> _lastPublishedBytes = new();
     /// <summary>逐任务发送续传重入锁：本地点击"恢复"与对端控制 RESUME 可能并发触发同一条续传，需去重</summary>
     private readonly ConcurrentDictionary<string, byte> _resuming = new();
+    /// <summary>发送并发上限：超过则在 StartSendAsync 排队，避免同时开启过多传输占满带宽/内存。</summary>
+    private const int MaxConcurrentSends = 2;
+    private readonly SemaphoreSlim _sendSlots = new(MaxConcurrentSends, MaxConcurrentSends);
+    /// <summary>发送带宽节流（0 = 不限速，可由设置调整）。</summary>
+    private readonly BandwidthThrottle _throttle = new(0);
+
+    /// <summary>发送带宽上限（字节/秒）；0 表示不限速。运行期可调整。</summary>
+    public long MaxSendBytesPerSecond
+    {
+        get => _throttle.LimitBytesPerSecond;
+        set => _throttle.LimitBytesPerSecond = value;
+    }
     /// <summary>大文件（数百 MB）按 64KB 切片会有上万条进度消息，
     /// 全量 Post 到 UI 线程会造成明显卡顿，限制到 ~10Hz/任务。</summary>
     private const int ProgressPublishIntervalMs = 100;
