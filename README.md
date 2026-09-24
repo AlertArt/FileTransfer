@@ -153,9 +153,12 @@ Created → Preparing → WaitingApproval → Transferring → Completed
 
 ```bash
 dotnet publish src/FileTransferApp.Desktop/FileTransferApp.Desktop.csproj \
-  -c Release -r win-x64 --self-contained true \
+  -c Release -f net10.0-windows10.0.19041.0 -r win-x64 --self-contained true \
   -o build/release/win-x64
 ```
+
+> 桌面 head 为多目标：`net10.0`（跨平台，mac/Linux 可用，无系统 Toast）+ `net10.0-windows10.0.19041.0`
+> （Windows 系统 Toast / 防火墙 / 清单）。发布 Windows 版需显式 `-f net10.0-windows10.0.19041.0`。
 
 产物：`build/release/win-x64/FileTransferApp.Desktop.exe`
 

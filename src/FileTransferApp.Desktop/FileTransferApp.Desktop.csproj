@@ -1,23 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!--If you are willing to use platform-specific APIs, use conditional compilation.
-    See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
-    <!-- net10.0-windows10.0.19041.0：启用 Windows SDK 投影（Windows.UI.Notifications），
-         供系统 Toast 通知使用；桌面 head 本就仅面向 Windows。 -->
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <!-- 多目标：
+         - net10.0                          → 跨平台桌面（Windows / macOS / Linux）
+         - net10.0-windows10.0.19041.0      → 启用 Windows SDK 投影（Windows.UI.Notifications）以支持系统 Toast
+         Windows 专属能力（Toast / 防火墙 / 清单 / 图标）仅在 windows 目标编译。 -->
+    <TargetFrameworks>net10.0;net10.0-windows10.0.19041.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- 现代风格 App 图标：多尺寸嵌入的 ICO 文件。发布产物 exe 本身即带此图标。 -->
-    <ApplicationIcon>Assets\appicon.ico</ApplicationIcon>
     <AssemblyTitle>快传 · Nearby Transfer</AssemblyTitle>
     <Product>快传 · Nearby Transfer</Product>
     <Description>跨平台（Windows/Android）局域网快传工具</Description>
     <Version>1.1.8</Version>
   </PropertyGroup>
 
-  <PropertyGroup>
+  <!-- Windows 专属构建属性 -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <ApplicationIcon>Assets\appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -30,9 +30,16 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
+  </ItemGroup>
+
+  <!-- Windows Toast 依赖仅在 windows 目标引入；WindowsNotificationService 亦只在 windows 目标编译 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
     <PackageReference Include="CommunityToolkit.WinUI.Notifications" />
     <!-- 显式引用以覆盖 Toast 工具包的传递依赖 4.7.0（安全更新） -->
     <PackageReference Include="System.Drawing.Common" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.19041.0'">
+    <Compile Remove="Services\WindowsNotificationService.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -102,7 +102,7 @@ jobs:
           cache: true
           cache-dependency-path: Directory.Packages.props
       - name: Publish win-x64
-        run: dotnet publish src/FileTransferApp.Desktop/FileTransferApp.Desktop.csproj -c Release -r win-x64 --self-contained true -o build/release/win-x64
+        run: dotnet publish src/FileTransferApp.Desktop/FileTransferApp.Desktop.csproj -c Release -f net10.0-windows10.0.19041.0 -r win-x64 --self-contained true -o build/release/win-x64
       - name: Zip
         run: Compress-Archive -Path build/release/win-x64/* -DestinationPath build/FileTransferApp-win-x64.zip -Force
       - name: Upload zip

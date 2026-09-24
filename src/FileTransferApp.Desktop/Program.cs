@@ -63,8 +63,12 @@ sealed class Program
             var storage = new DesktopStorageService();
             storage.CleanupStaleTempFiles(); // 启动清理上次会话残留的 .tmp
             services.AddSingleton<IStorageService>(storage);
-            // Windows 系统 Toast 通知：传输进行中显示进度，完成/失败投放状态通知
+            // Windows：系统 Toast 通知（传输进度/完成/失败）；其它桌面平台（mac/Linux）：无保活（Null）
+#if WINDOWS
             services.AddSingleton<IPlatformKeepAliveService, WindowsNotificationService>();
+#else
+            services.AddSingleton<IPlatformKeepAliveService>(NullPlatformKeepAliveService.Instance);
+#endif
             services.AddSingleton<IFileOpenService, DesktopFileOpenService>();
             services.AddSingleton<ILogFileProvider, DesktopLogFileProvider>();
         });
