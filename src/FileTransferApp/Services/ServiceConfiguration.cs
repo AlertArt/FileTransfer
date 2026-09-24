@@ -69,6 +69,7 @@ public static class ServiceConfiguration
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<HistoryViewModel>();
+        services.AddSingleton<PairingViewModel>();
 
         return services;
     }

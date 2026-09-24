@@ -22,6 +22,9 @@ public partial class SettingsView : UserControl
     /// <summary>用户点击"传输历史"。</summary>
     public event EventHandler? HistoryRequested;
 
+    /// <summary>用户点击"配对管理"。</summary>
+    public event EventHandler? PairingRequested;
+
     public SettingsView()
     {
         InitializeComponent();
@@ -100,4 +103,7 @@ public partial class SettingsView : UserControl
 
     private void OnHistoryClick(object? sender, RoutedEventArgs e)
         => HistoryRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnPairingClick(object? sender, RoutedEventArgs e)
+        => PairingRequested?.Invoke(this, EventArgs.Empty);
 }

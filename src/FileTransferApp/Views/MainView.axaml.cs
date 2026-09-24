@@ -223,6 +223,7 @@ public partial class MainView : UserControl
     private AboutView? _aboutView;
     private SettingsView? _settingsView;
     private HistoryView? _historyView;
+    private PairingView? _pairingView;
 
     /// <summary>底栏齿轮：打开设置页（主题/语言/日志/关于 统一入口）。</summary>
     private void OnOpenSettingsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -234,6 +235,7 @@ public partial class MainView : UserControl
             _settingsView.LogsRequested += (_, _) => OpenLogs();
             _settingsView.AboutRequested += (_, _) => OpenAbout();
             _settingsView.HistoryRequested += (_, _) => OpenHistory();
+            _settingsView.PairingRequested += (_, _) => OpenPairing();
         }
         ShowOverlay(LocalizationService.Instance.GetString("SettingsTitle"), _settingsView);
     }
@@ -263,6 +265,17 @@ public partial class MainView : UserControl
         _historyView ??= new HistoryView();
         _historyView.DataContext = vm;
         ShowOverlay(LocalizationService.Instance.GetString("HistoryTitle"), _historyView);
+    }
+
+    /// <summary>设置页"配对管理"子入口：集中展示已配对设备，可逐个/全部解除。</summary>
+    private void OpenPairing()
+    {
+        var vm = ServiceLocator.Services.GetService<PairingViewModel>();
+        if (vm is null) return;
+        vm.Load();
+        _pairingView ??= new PairingView();
+        _pairingView.DataContext = vm;
+        ShowOverlay(LocalizationService.Instance.GetString("PairingTitle"), _pairingView);
     }
 
     /// <summary>附近设备标题栏的"连接码"入口：展示本机二维码，并支持粘贴导入对方连接码。</summary>

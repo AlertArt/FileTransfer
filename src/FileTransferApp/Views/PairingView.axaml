@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:FileTransferApp.ViewModels"
+             xmlns:svc="using:FileTransferApp.Services"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="520"
+             x:Class="FileTransferApp.Views.PairingView"
+             x:DataType="vm:PairingViewModel">
+
+    <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <TextBlock Text="{svc:Localize Key=PairingTitle}"
+                       Classes="Title"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="{svc:Localize Key=PairingClearAll}"
+                    Command="{Binding ClearAllCommand}"
+                    IsEnabled="{Binding HasItems}" />
+        </Grid>
+
+        <Border Background="{DynamicResource Brush.SurfaceAlt}"
+                CornerRadius="{DynamicResource Radius.Md}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                Padding="8">
+            <Grid>
+                <TextBlock Text="{svc:Localize Key=PairingEmpty}"
+                           Classes="Muted"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding !HasItems}" />
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:PairingItemViewModel">
+                                <Border Classes="TransferCard"
+                                        Background="{DynamicResource Brush.Surface}"
+                                        CornerRadius="{DynamicResource Radius.Lg}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="1"
+                                        BoxShadow="{DynamicResource Shadow.Sm}"
+                                        Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="13"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Meta}" Classes="Muted" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="{svc:Localize Key=Pair.Unpair}"
+                                                Command="{Binding $parent[ItemsControl].DataContext.UnpairCommand}"
+                                                CommandParameter="{Binding}"
+                                                VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </DockPanel>
+</UserControl>

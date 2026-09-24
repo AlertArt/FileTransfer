@@ -79,6 +79,21 @@
 
                     <Border Classes="Card" Padding="4,4">
                         <StackPanel Spacing="2">
+                            <Button Classes="SettingsRow" Click="OnPairingClick">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                    <TextBlock Text="🔑" FontSize="18" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{svc:Localize Key=PairingTitle}"
+                                               FontSize="14"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" />
+                                    <TextBlock Grid.Column="2" Text="›"
+                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                               FontSize="18"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+
                             <Button Classes="SettingsRow" Click="OnHistoryClick">
                                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                                     <TextBlock Text="🕘" FontSize="18" VerticalAlignment="Center" />
