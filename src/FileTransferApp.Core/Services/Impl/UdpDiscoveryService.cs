@@ -94,11 +94,12 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
 
         _receiveTask = Task.Run(ReceiveLoopAsync, _cts.Token);
 
+        // 1s 调度 tick：按"是否有已知设备"自适应发送间隔（空闲降频省电）
         _heartbeatTimer = new Timer(
-            _ => _ = BroadcastHeartbeatAsync(),
+            _ => _ = HeartbeatTickAsync(),
             null,
             TimeSpan.Zero,
-            TimeSpan.FromMilliseconds(ProtocolConstants.HeartbeatIntervalMs));
+            TimeSpan.FromMilliseconds(1000));
 
         _sweepTimer = new Timer(
             _ => SweepOffline(),
@@ -240,6 +241,22 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
                 _messenger.Send(new DeviceUpdatedMessage(node));
             }
         }
+    }
+
+    /// <summary>空闲（无已知设备）时的心跳间隔：降频以省电（有设备时用 3s 保活）。</summary>
+    private const int IdleHeartbeatIntervalMs = 10000;
+    private long _lastHeartbeatTickMs;
+
+    /// <summary>自适应心跳调度：有已知设备 → 3s（保活/快速发现）；无设备 → 10s（省电）。</summary>
+    private async Task HeartbeatTickAsync()
+    {
+        int intervalMs;
+        lock (_lock) intervalMs = _devices.Count > 0 ? ProtocolConstants.HeartbeatIntervalMs : IdleHeartbeatIntervalMs;
+
+        var now = Environment.TickCount64;
+        if (_lastHeartbeatTickMs != 0 && now - _lastHeartbeatTickMs < intervalMs) return;
+        _lastHeartbeatTickMs = now;
+        await BroadcastHeartbeatAsync().ConfigureAwait(false);
     }
 
     private async Task BroadcastHeartbeatAsync()
