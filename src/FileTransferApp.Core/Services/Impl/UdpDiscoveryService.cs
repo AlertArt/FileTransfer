@@ -30,8 +30,6 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
     private Timer? _sweepTimer;
     private bool _disposed;
     private int _recvErrorStreak;
-    /// <summary>各来源最近一次单播回复的时间戳（抑制"收到即回复"造成的风暴）。</summary>
-    private readonly Dictionary<string, long> _lastReplyTick = new();
     /// <summary>累计收到的 UDP 包数（诊断：为 0 说明根本没收到对方广播/多播）。</summary>
     private long _recvCount;
     /// <summary>接收循环 SocketException 次数（诊断：持续增长说明本端 socket 有问题）。</summary>
@@ -232,11 +230,6 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
             {
                 _messenger.Send(new DeviceUpdatedMessage(node));
             }
-
-            // 收到心跳后向来源【单播】回一次心跳：即使本端收不到对方的广播/多播，
-            // 对方也能通过"我方广播 → 对方收到 → 对方单播回我"这条路径发现本机（反之亦然）。
-            // 这能根治"一方能看到对方、另一方看不到"的单向发现不对称。
-            _ = MaybeReplyUnicastAsync(result.RemoteEndPoint);
         }
     }
 
@@ -257,6 +250,22 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         {
             try { await _client!.SendAsync(bytes, bytes.Length, new IPEndPoint(target, ProtocolConstants.DiscoveryPort)).ConfigureAwait(false); }
             catch { /* 单个目标失败忽略 */ }
+        }
+
+        // 3) 【核心保活策略】对每个已知对端逐个单播心跳（发往对方发现端口 53317）。
+        //    Wi-Fi 省电/组播受限下广播常被过滤，而单播最可靠：即使一方收不到广播，
+        //    也能靠对方的单播维持"在线"，避免"发现→丢失→发现"抖动。
+        List<DeviceNode> peers;
+        lock (_lock) peers = _devices.Values.ToList();
+        foreach (var dev in peers)
+        {
+            if (dev.IpAddress is null) continue;
+            try
+            {
+                await _client!.SendAsync(bytes, bytes.Length,
+                    new IPEndPoint(dev.IpAddress, ProtocolConstants.DiscoveryPort)).ConfigureAwait(false);
+            }
+            catch { /* 单个对端失败忽略 */ }
         }
     }
 
@@ -306,27 +315,6 @@ public sealed class UdpDiscoveryService : IDiscoveryService, IDisposable
         var json = JsonSerializer.Serialize(Self);
         var bytes = Encoding.UTF8.GetBytes(json);
         await _client.SendAsync(bytes, bytes.Length, target).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// 收到心跳后向来源单播回一次心跳（同一来源 2.5s 内最多回一次，避免双方互回形成风暴）。
-    /// 目的：广播/多播在部分设备/网络下只能单向送达；单播回复让"能发不能收"的一端也能被发现。
-    /// </summary>
-    private async Task MaybeReplyUnicastAsync(IPEndPoint remote)
-    {
-        try
-        {
-            var key = remote.ToString();
-            var now = Environment.TickCount64;
-            lock (_lastReplyTick)
-            {
-                if (_lastReplyTick.TryGetValue(key, out var last) && now - last < 2500) return;
-                _lastReplyTick[key] = now;
-            }
-            await SendHeartbeatToAsync(remote).ConfigureAwait(false);
-            FtaTrace.Verbose("FTA.DISC", $"unicast reply -> {remote}");
-        }
-        catch { /* 回复失败忽略 */ }
     }
 
     /// <summary>
