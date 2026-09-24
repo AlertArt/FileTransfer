@@ -278,6 +278,23 @@ public partial class MainView : UserControl
         ShowOverlay(LocalizationService.Instance.GetString("PairingTitle"), _pairingView);
     }
 
+    /// <summary>发送剪贴板文本：读剪贴板 → 写临时 .txt → 走正常传输发送给当前选中设备。</summary>
+    private async void OnSendClipboardClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            var text = clipboard is null ? null : await clipboard.TryGetTextAsync();
+            if (string.IsNullOrWhiteSpace(text)) return;
+            await vm.SendTextAsync(text);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"FTA.FILE: send clipboard FAIL: {ex.Message}");
+        }
+    }
+
     /// <summary>附近设备标题栏的"连接码"入口：展示本机二维码，并支持粘贴导入对方连接码。</summary>
     private void OnOpenConnectClick(object? sender, RoutedEventArgs e)
     {

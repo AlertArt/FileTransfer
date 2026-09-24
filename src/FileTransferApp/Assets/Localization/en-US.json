@@ -25,6 +25,7 @@
   "Retry": "Retry",
   "Cancel": "Cancel",
   "DeleteTask": "Delete task",
+  "SendClipboard": "Send clipboard",
   "PauseAll": "Pause all",
   "ResumeAll": "Resume all",
   "State.Created": "Created",

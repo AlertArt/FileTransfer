@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using Avalonia.Threading;
@@ -231,6 +232,22 @@ public partial class MainViewModel : ObservableObject,
     {
         var files = await _filePicker.PickFilesAsync();
         await SendFilesAsync(files);
+    }
+
+    /// <summary>发送剪贴板/任意文本：写入临时 .txt 文件后走正常文件传输（对端收到一个文本文件）。</summary>
+    public async Task SendTextAsync(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            var path = Path.Combine(Path.GetTempPath(), $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+            await File.WriteAllTextAsync(path, text);
+            await SendFilesAsync(new[] { path });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"FTA.FILE: SendTextAsync FAIL: {ex.Message}");
+        }
     }
 
     /// <summary>将指定文件列表发送至当前选中设备（供文件选择器与拖拽区共用）</summary>

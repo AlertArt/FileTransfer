@@ -25,6 +25,7 @@
   "Retry": "重试",
   "Cancel": "取消",
   "DeleteTask": "删除任务",
+  "SendClipboard": "发送剪贴板",
   "PauseAll": "全部暂停",
   "ResumeAll": "全部恢复",
   "State.Created": "已创建",
