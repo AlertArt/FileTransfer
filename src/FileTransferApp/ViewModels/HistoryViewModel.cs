@@ -12,21 +12,23 @@ namespace FileTransferApp.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private readonly ITransferHistoryStore _store;
+    private readonly ILocalizationService _loc;
 
     public ObservableCollection<HistoryItemViewModel> Entries { get; } = new();
 
     [ObservableProperty] public partial bool HasEntries { get; set; }
 
-    public HistoryViewModel(ITransferHistoryStore store)
+    public HistoryViewModel(ITransferHistoryStore store, ILocalizationService localization)
     {
         _store = store;
+        _loc = localization;
         Load();
     }
 
     public void Load()
     {
         Entries.Clear();
-        foreach (var e in _store.GetAll()) Entries.Add(new HistoryItemViewModel(e));
+        foreach (var e in _store.GetAll()) Entries.Add(new HistoryItemViewModel(e, _loc));
         HasEntries = Entries.Count > 0;
     }
 
@@ -46,7 +48,7 @@ public sealed class HistoryItemViewModel
     public string? Error { get; }
     public bool HasError { get; }
 
-    public HistoryItemViewModel(TransferHistoryEntry e)
+    public HistoryItemViewModel(TransferHistoryEntry e, ILocalizationService loc)
     {
         FileName = e.FileName;
 
@@ -58,8 +60,8 @@ public sealed class HistoryItemViewModel
             TransferState.Disconnected => "State.Disconnected",
             _ => "State.Completed",
         };
-        var dir = LocalizationService.Instance.GetString(dirKey);
-        var state = LocalizationService.Instance.GetString(stateKey);
+        var dir = loc.GetString(dirKey);
+        var state = loc.GetString(stateKey);
         var size = SpeedFormatter.FormatSize(e.TotalBytes);
         var when = (e.EndedUtc == default ? e.StartedUtc : e.EndedUtc).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
         var peer = string.IsNullOrEmpty(e.PeerName) ? string.Empty : $" · {e.PeerName}";

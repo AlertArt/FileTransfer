@@ -33,6 +33,7 @@ public partial class MainViewModel : ObservableObject,
     private readonly IFilePickerService _filePicker;
     private readonly TransferKeepAliveCoordinator _keepAlive;
     private readonly ITransferHistoryStore _history;
+    private readonly ILocalizationService _loc;
 
     public DeviceListViewModel Devices { get; }
     public ObservableCollection<TransferItemViewModel> Transfers { get; } = new();
@@ -82,7 +83,8 @@ public partial class MainViewModel : ObservableObject,
         IFilePickerService filePicker,
         IPlatformKeepAliveService keepAlive,
         IPairingService pairing,
-        ITransferHistoryStore history)
+        ITransferHistoryStore history,
+        ILocalizationService localization)
     {
         _messenger = messenger;
         _engine = engine;
@@ -90,6 +92,7 @@ public partial class MainViewModel : ObservableObject,
         _filePicker = filePicker;
         _keepAlive = new TransferKeepAliveCoordinator(keepAlive);
         _history = history;
+        _loc = localization;
         Devices = new DeviceListViewModel(messenger, discovery, pairing);
         Transfers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTransfers));
 
@@ -128,8 +131,8 @@ public partial class MainViewModel : ObservableObject,
             item?.ApplyStateChange(message.NewState);
             // 委托协调器：根据本次状态变化同步保活开关（内部去重，避免重复调用平台 API）
             _keepAlive.OnTaskStateChanged(message.FileId, message.NewState,
-                LocalizationService.Instance.GetString("KeepAliveTitle"),
-                LocalizationService.Instance.GetString("KeepAliveContent"));
+                _loc.GetString("KeepAliveTitle"),
+                _loc.GetString("KeepAliveContent"));
             RefreshAggregate();
         });
     }
@@ -188,8 +191,8 @@ public partial class MainViewModel : ObservableObject,
             var item = Transfers.FirstOrDefault(t => t.FileId == message.FileId);
             item?.ApplyCompleted(message.Success);
             _keepAlive.OnTaskCompleted(message.FileId, message.Success,
-                LocalizationService.Instance.GetString("KeepAliveTitle"),
-                LocalizationService.Instance.GetString("KeepAliveContent"));
+                _loc.GetString("KeepAliveTitle"),
+                _loc.GetString("KeepAliveContent"));
             PersistHistory(message.FileId);
             RefreshAggregate();
         });
@@ -297,7 +300,7 @@ public partial class MainViewModel : ObservableObject,
             var fallback = new DeviceNode
             {
                 DeviceId = "manual:" + Devices.ManualIp + ":" + port,
-                DeviceName = LocalizationService.Instance.Format("ManualConnectName", Devices.ManualIp, port),
+                DeviceName = _loc.Format("ManualConnectName", Devices.ManualIp, port),
                 DeviceType = DeviceType.Unknown,
                 IpAddress = ip,
                 Port = port,
@@ -314,7 +317,7 @@ public partial class MainViewModel : ObservableObject,
         if (Transfers.Any(t => t.FileId == fileId)) return;
         var task = _engine.GetTask(fileId);
         if (task is null) return;
-        Transfers.Insert(0, new TransferItemViewModel(_messenger, _engine, task));
+        Transfers.Insert(0, new TransferItemViewModel(_messenger, _engine, task, _loc));
         RefreshAggregate();
     }
 

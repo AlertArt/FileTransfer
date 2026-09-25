@@ -25,6 +25,7 @@ public partial class TransferItemViewModel : ObservableObject,
     private readonly IMessenger _messenger;
     private readonly ITransferEngine _engine;
     private readonly TransferTaskInfo _task;
+    private readonly ILocalizationService _loc;
 
     public string FileId => _task.FileId;
     public TransferDirection Direction => _task.Direction;
@@ -76,11 +77,12 @@ public partial class TransferItemViewModel : ObservableObject,
     /// <summary>是否显示 ErrorMessage 行（节省卡片纵向空间）：非空 且 处于失败/取消/断开 任一终态</summary>
     [ObservableProperty] public partial bool ShowErrorHint { get; set; }
 
-    public TransferItemViewModel(IMessenger messenger, ITransferEngine engine, TransferTaskInfo task)
+    public TransferItemViewModel(IMessenger messenger, ITransferEngine engine, TransferTaskInfo task, ILocalizationService localization)
     {
         _messenger = messenger;
         _engine = engine;
         _task = task;
+        _loc = localization;
 
         FileName = task.FileName;
         TotalBytes = task.TotalBytes;
@@ -97,7 +99,7 @@ public partial class TransferItemViewModel : ObservableObject,
         _messenger.RegisterAll(this);
 
         // 监听语言切换：重新生成状态文本与方向标签
-        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+        _loc.PropertyChanged += OnLanguageChanged;
     }
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -206,10 +208,10 @@ public partial class TransferItemViewModel : ObservableObject,
             SetError(text);
     }
 
-    private static string? ResolveError(TransferTaskInfo t)
+    private string? ResolveError(TransferTaskInfo t)
     {
-        if (!string.IsNullOrEmpty(t.ErrorCode) && LocalizationService.Instance.HasString(t.ErrorCode))
-            return LocalizationService.Instance.Format(t.ErrorCode, t.ErrorArgs ?? Array.Empty<object>());
+        if (!string.IsNullOrEmpty(t.ErrorCode) && _loc.HasString(t.ErrorCode))
+            return _loc.Format(t.ErrorCode, t.ErrorArgs ?? Array.Empty<object>());
         return t.ErrorMessage;
     }
 
@@ -313,7 +315,7 @@ public partial class TransferItemViewModel : ObservableObject,
                       && !string.IsNullOrEmpty(_task.LocalPath);
     }
 
-    private static string StateToText(TransferState s)
+    private string StateToText(TransferState s)
     {
         var key = s switch
         {
@@ -328,16 +330,16 @@ public partial class TransferItemViewModel : ObservableObject,
             TransferState.Cancelled => "State.Cancelled",
             _ => s.ToString(),
         };
-        return LocalizationService.Instance.GetString(key);
+        return _loc.GetString(key);
     }
 
     private static string FormatSpeed(double bytesPerSecond)
         => Core.Services.Impl.SpeedFormatter.FormatSpeed(bytesPerSecond);
 
-    private static string BuildMetaText(TransferDirection dir, long totalBytes)
+    private string BuildMetaText(TransferDirection dir, long totalBytes)
     {
         var dirKey = dir == TransferDirection.Send ? "Direction.Send" : "Direction.Receive";
-        var dirText = LocalizationService.Instance.GetString(dirKey);
+        var dirText = _loc.GetString(dirKey);
         return $"[{dirText}] {Core.Services.Impl.SpeedFormatter.FormatSize(totalBytes)}";
     }
 

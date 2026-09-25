@@ -2,6 +2,7 @@ using FileTransferApp.Core.Models;
 using FileTransferApp.ViewModels;
 using CommunityToolkit.Mvvm.Messaging;
 using FileTransferApp.Core.Services.Interfaces;
+using FileTransferApp.Services;
 using Xunit;
 
 namespace FileTransferApp.Tests;
@@ -28,7 +29,7 @@ public class TransferItemViewModel_StateFlags_Tests
     public sealed class TestableTransferItemViewModel : TransferItemViewModel
     {
         public TestableTransferItemViewModel(IMessenger m, ITransferEngine e, TransferTaskInfo t)
-            : base(m, e, t) { }
+            : base(m, e, t, LocalizationService.Instance) { }
     }
 
     private static (TestableTransferItemViewModel vm, TransferTaskInfo task) Build(
@@ -112,7 +113,7 @@ public class TransferItemViewModel_StateFlags_Tests
         };
         var vm = new TestableTransferItemViewModel(WeakReferenceMessenger.Default, new StubEngine(), task);
 
-        Assert.Equal("f123",       vm.FileId);
+        Assert.Equal("f123",       vm.FileId); // ctor 已通过 TestableTransferItemViewModel 注入本地化服务
         Assert.Equal("hello.txt",  vm.FileName);
         Assert.Equal(4096,         vm.TotalBytes);
         Assert.Equal(1024,         vm.BytesTransferred);

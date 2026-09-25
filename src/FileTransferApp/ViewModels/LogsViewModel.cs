@@ -21,6 +21,7 @@ public partial class LogsViewModel : ObservableObject
     private const int MaxFilesShown = 4;
 
     private readonly ILogFileProvider _provider;
+    private readonly ILocalizationService _loc;
 
     [ObservableProperty] public partial string LogText { get; set; } = string.Empty;
 
@@ -36,9 +37,10 @@ public partial class LogsViewModel : ObservableObject
 
     partial void OnVerboseEnabledChanged(bool value) => FtaTrace.SetVerbose(value);
 
-    public LogsViewModel(ILogFileProvider provider)
+    public LogsViewModel(ILogFileProvider provider, ILocalizationService localization)
     {
         _provider = provider;
+        _loc = localization;
         VerboseEnabled = FtaTrace.IsVerboseEnabled; // 同步当前状态
     }
 
@@ -53,7 +55,7 @@ public partial class LogsViewModel : ObservableObject
         var logs = _provider.GetLogs();
         if (logs.Count == 0 && string.IsNullOrWhiteSpace(memory))
         {
-            LogText = LocalizationService.Instance.GetString("LogsEmpty");
+            LogText = _loc.GetString("LogsEmpty");
             SourceInfo = string.Empty;
             HasLogs = false;
             return;
@@ -114,7 +116,7 @@ public partial class LogsViewModel : ObservableObject
 
         if (totalBytes == 0)
         {
-            LogText = LocalizationService.Instance.GetString("LogsEmpty");
+            LogText = _loc.GetString("LogsEmpty");
             SourceInfo = string.Empty;
             HasLogs = false;
             return;

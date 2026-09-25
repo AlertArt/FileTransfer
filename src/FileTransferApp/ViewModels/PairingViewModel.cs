@@ -11,14 +11,16 @@ namespace FileTransferApp.ViewModels;
 public partial class PairingViewModel : ObservableObject
 {
     private readonly IPairingService _pairing;
+    private readonly ILocalizationService _loc;
 
     public ObservableCollection<PairingItemViewModel> Items { get; } = new();
 
     [ObservableProperty] public partial bool HasItems { get; set; }
 
-    public PairingViewModel(IPairingService pairing)
+    public PairingViewModel(IPairingService pairing, ILocalizationService localization)
     {
         _pairing = pairing;
+        _loc = localization;
         Load();
     }
 
@@ -26,7 +28,7 @@ public partial class PairingViewModel : ObservableObject
     {
         Items.Clear();
         foreach (var r in _pairing.GetAllPairRecords().OrderByDescending(r => r.LastUsedUtc))
-            Items.Add(new PairingItemViewModel(r));
+            Items.Add(new PairingItemViewModel(r, _loc));
         HasItems = Items.Count > 0;
     }
 
@@ -54,12 +56,12 @@ public sealed class PairingItemViewModel
     public string Name { get; }
     public string Meta { get; }
 
-    public PairingItemViewModel(PairRecord record)
+    public PairingItemViewModel(PairRecord record, ILocalizationService loc)
     {
         DeviceId = record.PeerDeviceId;
         Name = string.IsNullOrEmpty(record.PeerDeviceName) ? record.PeerDeviceId : record.PeerDeviceName;
         var type = string.IsNullOrEmpty(record.PeerDeviceType) ? "?" : record.PeerDeviceType;
         var when = record.PairedUtc.ToLocalTime().ToString("yyyy-MM-dd");
-        Meta = $"{type} · {LocalizationService.Instance.Format("PairingPairedAt", when)}";
+        Meta = $"{type} · {loc.Format("PairingPairedAt", when)}";
     }
 }

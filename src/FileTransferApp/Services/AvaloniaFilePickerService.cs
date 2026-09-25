@@ -17,6 +17,10 @@ namespace FileTransferApp.Services;
 /// </summary>
 public sealed class AvaloniaFilePickerService : IFilePickerService
 {
+    private readonly ILocalizationService _loc;
+
+    public AvaloniaFilePickerService(ILocalizationService localization) => _loc = localization;
+
     public async Task<string[]> PickFilesAsync()
     {
         IStorageProvider? provider = null;
@@ -62,7 +66,7 @@ public sealed class AvaloniaFilePickerService : IFilePickerService
 
         var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LocalizationService.Instance.GetString("FilePicker.Title"),
+            Title = _loc.GetString("FilePicker.Title"),
             AllowMultiple = true
         });
 

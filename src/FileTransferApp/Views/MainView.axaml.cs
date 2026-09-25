@@ -302,9 +302,10 @@ public partial class MainView : UserControl
         var discovery = ServiceLocator.Services?.GetService<IDiscoveryService>();
         if (discovery is null) return;
         var selfIp = MainViewModel.GetLanIPv4Addresses().FirstOrDefault() ?? string.Empty;
+        var loc = ServiceLocator.Services.GetRequiredService<ILocalizationService>();
         var view = new ConnectView
         {
-            DataContext = new ConnectViewModel(vm.Devices, discovery.Self, selfIp),
+            DataContext = new ConnectViewModel(vm.Devices, discovery.Self, selfIp, loc),
         };
         ShowOverlay(LocalizationService.Instance.GetString("Connect.Title"), view);
     }

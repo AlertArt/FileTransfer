@@ -16,6 +16,7 @@ namespace FileTransferApp.ViewModels;
 public partial class ConnectViewModel : ObservableObject
 {
     private readonly DeviceListViewModel _devices;
+    private readonly ILocalizationService _loc;
 
     [ObservableProperty] public partial Bitmap? QrImage { get; set; }
     [ObservableProperty] public partial string SelfCode { get; set; } = string.Empty;
@@ -23,9 +24,10 @@ public partial class ConnectViewModel : ObservableObject
     [ObservableProperty] public partial string StatusHint { get; set; } = string.Empty;
     [ObservableProperty] public partial bool ImportOk { get; set; }
 
-    public ConnectViewModel(DeviceListViewModel devices, DeviceNode self, string selfIp)
+    public ConnectViewModel(DeviceListViewModel devices, DeviceNode self, string selfIp, ILocalizationService localization)
     {
         _devices = devices;
+        _loc = localization;
 
         // 本机节点默认没有 IpAddress（发现层不填），用外部传入的 LAN IP 组装连接码
         var codeNode = new DeviceNode
@@ -47,13 +49,13 @@ public partial class ConnectViewModel : ObservableObject
         if (!ConnectionCode.TryParse(ImportCode, out var node) || node is null)
         {
             ImportOk = false;
-            StatusHint = LocalizationService.Instance.GetString("Connect.ImportInvalid");
+            StatusHint = _loc.GetString("Connect.ImportInvalid");
             return;
         }
 
         _devices.AddOrSelectManual(node);
         ImportOk = true;
-        StatusHint = LocalizationService.Instance.Format("Connect.ImportOk", node.DeviceName);
+        StatusHint = _loc.Format("Connect.ImportOk", node.DeviceName);
         ImportCode = string.Empty;
     }
 }
