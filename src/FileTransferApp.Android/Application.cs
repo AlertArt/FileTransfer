@@ -100,6 +100,8 @@ namespace FileTransferApp.Android
         /// <summary>注册默认网络回调：可用/丢失时触发 OnNetworkChanged。</summary>
         private void RegisterConnectivityCallback()
         {
+            // RegisterDefaultNetworkCallback 需要 API 24+；minSdk 23 时跳过（老机仍由发现层自愈兜底）
+            if (!OperatingSystem.IsAndroidVersionAtLeast(24)) return;
             try
             {
                 var cm = (ConnectivityManager?)GetSystemService(ConnectivityService);

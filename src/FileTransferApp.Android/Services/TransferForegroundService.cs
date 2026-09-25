@@ -101,6 +101,7 @@ public sealed class TransferForegroundService : Service
             var flags = PendingIntentFlags.OneShot;
             if (OperatingSystem.IsAndroidVersionAtLeast(23)) flags |= PendingIntentFlags.Immutable;
             var pi = PendingIntent.GetService(this, 1001, restart, flags);
+            if (pi is null) return;
 
             var am = (AlarmManager?)GetSystemService(AlarmService);
             am?.Set(AlarmType.ElapsedRealtime, SystemClock.ElapsedRealtime() + 1000, pi);
