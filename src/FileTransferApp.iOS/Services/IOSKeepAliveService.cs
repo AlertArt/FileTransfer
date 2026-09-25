@@ -18,8 +18,10 @@ namespace FileTransferApp.iOS.Services;
 public sealed class IOSKeepAliveService : IPlatformKeepAliveService
 {
     private const string DefaultTitle = "FileTransferApp";
+    private readonly ILocalizationService _loc;
+
     // 兜底前台提示文案：按照当前语言动态解析
-    private static string DefaultContent => LocalizationService.Instance.GetString("KeepAliveForeground");
+    private string DefaultContent => _loc.GetString("KeepAliveForeground");
 
     // 通知分类与"打开文件"操作
     private const string CategoryId = "fta_status";
@@ -32,8 +34,9 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     // 平台无关的状态机：跟踪 Running / 文案回退 / 提示去重
     internal readonly KeepAliveStatus Status = new();
 
-    public IOSKeepAliveService()
+    public IOSKeepAliveService(ILocalizationService localization)
     {
+        _loc = localization;
         EnsureNotificationSetup();
     }
 
@@ -131,7 +134,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     }
 
     /// <summary>注册通知分类（"打开文件"操作）并设置代理，处理前台展示与操作回调。</summary>
-    private static void EnsureNotificationSetup()
+    private void EnsureNotificationSetup()
     {
         try
         {
@@ -140,7 +143,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
 
             var open = UNNotificationAction.FromIdentifier(
                 OpenActionId,
-                LocalizationService.Instance.GetString("Notification.Open"),
+                _loc.GetString("Notification.Open"),
                 UNNotificationActionOptions.Foreground);
             var category = UNNotificationCategory.FromIdentifier(
                 CategoryId,
@@ -199,7 +202,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
     }
 
     /// <summary>在当前最上层 ViewController 上展示一次性 UIAlertController</summary>
-    private static void ShowKeepAliveAlert(string title, string content)
+    private void ShowKeepAliveAlert(string title, string content)
     {
         DispatchQueue.MainQueue.DispatchAsync(() =>
         {
@@ -214,7 +217,7 @@ public sealed class IOSKeepAliveService : IPlatformKeepAliveService
             while (vc.PresentedViewController is not null) vc = vc.PresentedViewController;
 
             var alert = UIAlertController.Create(title, content, UIAlertControllerStyle.Alert);
-            alert.AddAction(UIAlertAction.Create(LocalizationService.Instance.GetString("KeepAliveOk"), UIAlertActionStyle.Default, null));
+            alert.AddAction(UIAlertAction.Create(_loc.GetString("KeepAliveOk"), UIAlertActionStyle.Default, null));
             vc.PresentViewController(alert, true, null);
         });
     }

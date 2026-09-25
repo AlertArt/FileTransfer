@@ -33,12 +33,14 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
     private const string KeyStatusText = "statusText";
     private const string KeyProgressValue = "progressValue";
 
+    private readonly ILocalizationService _loc;
     private bool _transferVisible;
     private uint _sequence;
     private string _lastSignature = string.Empty;
 
-    public WindowsNotificationService()
+    public WindowsNotificationService(ILocalizationService localization)
     {
+        _loc = localization;
         // 操作按钮点击回调（应用运行/被唤起时触发）
         try { ToastNotificationManagerCompat.OnActivated += OnToastActivated; }
         catch { /* 通知不可用不影响运行 */ }
@@ -71,7 +73,7 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
             if (!string.IsNullOrEmpty(openPath))
             {
                 builder.AddButton(new ToastButton(
-                    LocalizationService.Instance.GetString("Notification.Open"),
+                    _loc.GetString("Notification.Open"),
                     BuildArgs(("action", "open"), ("path", openPath!))));
             }
             builder.Show(t =>
@@ -130,7 +132,7 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
     /// 数据绑定 Toast 模板：进度条承载状态文字（供 Update 原地刷新）；
     /// fileId 非空时附加「取消」按钮（参数携带 fileId，点击经 OnActivated 处理）。
     /// </summary>
-    private static Windows.Data.Xml.Dom.XmlDocument BuildTransferXml(string? fileId)
+    private Windows.Data.Xml.Dom.XmlDocument BuildTransferXml(string? fileId)
     {
         var content = new ToastContent
         {
@@ -157,7 +159,7 @@ public sealed class WindowsNotificationService : IPlatformKeepAliveService
                 Buttons =
                 {
                     new ToastButton(
-                        LocalizationService.Instance.GetString("Notification.Cancel"),
+                        _loc.GetString("Notification.Cancel"),
                         BuildArgs(("action", "cancel"), ("id", fileId!))),
                 },
             };

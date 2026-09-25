@@ -30,11 +30,11 @@ namespace FileTransferApp.Android
                 // 统一装配：平台服务在共享注册之后注册，可覆盖共享默认实现
                 ServiceConfiguration.BuildProvider(deviceName, Core.Models.DeviceType.Android, services =>
                 {
-                    services.AddSingleton<IPlatformKeepAliveService>(_ => new AndroidKeepAliveService(this));
+                    services.AddSingleton<IPlatformKeepAliveService>(sp => new AndroidKeepAliveService(this, sp.GetRequiredService<ILocalizationService>()));
                     var storage = new AndroidStorageService(this);
                     storage.CleanupStaleTempFiles(); // 启动清理上次会话残留的 .tmp
                     services.AddSingleton<IStorageService>(storage);
-                    services.AddSingleton<IFileOpenService>(_ => new AndroidFileOpenService(this));
+                    services.AddSingleton<IFileOpenService>(sp => new AndroidFileOpenService(this, sp.GetRequiredService<ILocalizationService>()));
                     // 覆盖共享的 Avalonia 文件选择器：Android 需走原生 SAF（内部惰性取 MainActivity.Current）
                     services.AddSingleton<IFilePickerService>(_ => new AndroidFilePickerService());
                     services.AddSingleton<ILogFileProvider>(_ => new AndroidLogFileProvider());

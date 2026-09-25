@@ -13,17 +13,19 @@ namespace FileTransferApp.Android.Services;
 /// </summary>
 public sealed class AndroidKeepAliveService : IPlatformKeepAliveService
 {
-    // 兜底文案：调用方传空时才使用，按当前语言动态解析
-    private static string DefaultTitle => LocalizationService.Instance.GetString("KeepAliveTitle");
-    private static string DefaultContent => LocalizationService.Instance.GetString("KeepAliveIdle");
-
     private readonly Context _context;
+    private readonly ILocalizationService _loc;
     // 平台无关的状态机：跟踪 Running / 文案回退 / 提示去重
     internal readonly KeepAliveStatus Status = new();
 
-    public AndroidKeepAliveService(Context context)
+    // 兜底文案：调用方传空时才使用，按当前语言动态解析
+    private string DefaultTitle => _loc.GetString("KeepAliveTitle");
+    private string DefaultContent => _loc.GetString("KeepAliveIdle");
+
+    public AndroidKeepAliveService(Context context, ILocalizationService localization)
     {
         _context = context;
+        _loc = localization;
     }
 
     public void StartKeepAlive(string title, string content)

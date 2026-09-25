@@ -1,6 +1,7 @@
 using Android.Content;
 using Android.Widget;
 using AndroidX.Core.Content;
+using FileTransferApp.Core.Services.Interfaces;
 using FileTransferApp.Services;
 
 namespace FileTransferApp.Android.Services;
@@ -14,9 +15,14 @@ namespace FileTransferApp.Android.Services;
 public sealed class AndroidFileOpenService : FileTransferApp.Services.IFileOpenService
 {
     private readonly Context _context;
+    private readonly ILocalizationService _loc;
     private const string AuthoritySuffix = ".fileprovider";
 
-    public AndroidFileOpenService(Context context) => _context = context;
+    public AndroidFileOpenService(Context context, ILocalizationService localization)
+    {
+        _context = context;
+        _loc = localization;
+    }
 
     public Task<bool> OpenFileAsync(string filePath)
     {
@@ -71,11 +77,11 @@ public sealed class AndroidFileOpenService : FileTransferApp.Services.IFileOpenS
         }
     }
 
-    private static string i18n(string key, string fallback)
+    private string i18n(string key, string fallback)
     {
         try
         {
-            var value = LocalizationService.Instance.GetString(key);
+            var value = _loc.GetString(key);
             return string.IsNullOrEmpty(value) || value == key ? fallback : value;
         }
         catch
